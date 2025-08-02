@@ -80,10 +80,11 @@
       }
 
       data.forEach(row => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${row.Trolly ID || '-'}</td><td>${row.Status || '-'}</td>`;
-        tbody.appendChild(tr);
-      });
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td>${row["Trolly ID"] || '-'}</td><td>${row.Status || '-'}</td>`;
+  tbody.appendChild(tr);
+});
+
 
       table.style.display = 'table';
     })
