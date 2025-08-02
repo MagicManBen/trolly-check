@@ -1,0 +1,18 @@
+<script>
+  fetch('YOUR_FLOW_URL_HERE', {
+    method: 'POST'
+  })
+  .then(response => response.json())
+  .then(data => {
+    const tbody = document.querySelector('#trollyTable tbody');
+    data.forEach(row => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${row.TrollyID}</td><td>${row.Status}</td>`;
+      tbody.appendChild(tr);
+    });
+  })
+  .catch(error => {
+    document.body.innerHTML += `<pre style="color:red;">${error}</pre>`;
+    console.error('Error:', error);
+  });
+</script>
