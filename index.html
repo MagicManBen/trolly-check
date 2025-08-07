@@ -20,7 +20,7 @@ button{cursor:pointer;background:#1e8c1e;color:#fff}
 #keypad .key{background:#333;color:#fff;border-radius:6px;font-size:1.1rem;padding:12px 0;user-select:none}
 #keypad .wide{grid-column:span 2}
  
-/* debug toggle */
+/* debug toggle (button removed, styles left unchanged intentionally) */
 #debugToggle{position:fixed;bottom:20px;left:20px;background:#444;border-radius:50%;width:46px;height:46px;font-size:22px;line-height:46px}
 #debug{position:fixed;bottom:80px;left:20px;width:300px;max-height:50vh;overflow:auto;background:#111;padding:10px;border:1px solid #555;border-radius:8px;font-family:Consolas,monospace;font-size:.75rem;display:none}
 #debug pre{margin:0;white-space:pre-wrap}
@@ -46,12 +46,17 @@ button{cursor:pointer;background:#1e8c1e;color:#fff}
 #resultTable{width:90%;max-width:600px;color:#000;background:#fff;border-radius:6px;overflow:auto;font-family:Arial,sans-serif;font-size:.9rem;padding:10px}
 #confirmBtn{margin-top:20px;padding:12px 24px;background:#1e8c1e;color:#fff;border-radius:6px;font-size:1rem}
  
-/* --- ADDED (exactly as before) : + button & modal styles --- */
+/* --- ADDED exactly as before: + button & modal styles --- */
 button.danger{background:#b30000}
 #plusBtn{position:fixed;bottom:20px;right:20px;width:48px;height:48px;border-radius:50%;font-size:28px;padding:6px 0}
 #modal{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;justify-content:center;align-items:center}
 #box{background:#222;padding:20px;border-radius:8px;width:90%;max-width:380px}
 #box select,#box input{width:100%;margin:6px 0}
+ 
+/* --- ADDED: modal keypad to match home keypad --- */
+#modalKeypad{margin:10px auto;display:grid;grid-template-columns:repeat(3,60px);gap:8px;justify-content:center}
+#modalKeypad .key{background:#333;color:#fff;border-radius:6px;font-size:1.1rem;padding:12px 0;user-select:none}
+#modalKeypad .wide{grid-column:span 2}
 </style>
 </head>
 <body>
@@ -108,21 +113,28 @@ button.danger{background:#b30000}
   </div>
 </div>
  
-<!-- --- ADDED (exactly as before) : + button & modal markup --- -->
+<!-- --- ADDED exactly as before: + button & modal markup (with keypad, read-only inputs) --- -->
 <button id="plusBtn">+</button>
 <div id="modal">
   <div id="box">
     <h2>Create PIN</h2>
     <select id="userSel"></select>
-    <input id="pin1" type="password" maxlength="4" placeholder="New PIN" />
-    <input id="pin2" type="password" maxlength="4" placeholder="Confirm PIN" />
+    <input id="pin1" type="password" maxlength="4" placeholder="New PIN" readonly />
+    <input id="pin2" type="password" maxlength="4" placeholder="Confirm PIN" readonly />
+    <div id="modalKeypad">
+      <button class="key">1</button><button class="key">2</button><button class="key">3</button>
+      <button class="key">4</button><button class="key">5</button><button class="key">6</button>
+      <button class="key">7</button><button class="key">8</button><button class="key">9</button>
+      <button class="key wide" data-act="clear">C</button>
+      <button class="key">0</button><button class="key wide" data-act="del">←</button>
+    </div>
     <button id="save">Save PIN</button>
     <button class="danger" id="cancel">Cancel</button>
     <div id="modalMsg"></div>
   </div>
 </div>
  
-<!-- Debug -->
+<!-- Debug (button removed as requested) -->
 <div id="debug"><pre id="debugLog"></pre></div>
  
 <!-- ONLY SHOWING CHANGED PARTS AT THE TOP FOR CLARITY -->
@@ -130,6 +142,7 @@ button.danger{background:#b30000}
 /* ---------- constants ---------- */
 const FLOW_VALIDATE = https://prod-89.westeurope.logic.azure.com:443/workflows/f1639be7e1a441a4a97130cb087ebe28/triggers/manual/paths/invoke?api-version=2016-06-01&sp=/triggers/manual/run&sv=1.0&sig=LX2eGuTosv-wKZinDs7z4TkpNTZ3POLUvMiiXftISOE;
 const FLOW_BASE = FLOW_VALIDATE; // unified flow
+const FLOW = FLOW_VALIDATE; // alias to match original modal code
  
 const $=id=>document.getElementById(id);
  
@@ -140,6 +153,7 @@ let loggedInUser=""; // NEW: store the validated user's name
  
 /* ---------- debug ---------- */
 function dbg(...m){const log=$("debugLog");log.textContent+=m.join(" ")+"\n";log.parentElement.scrollTop=log.parentElement.scrollHeight;}
+// Guard in case the button doesn't exist (as requested)
 if ($("debugToggle")) $("debugToggle").onclick=()=>{$("debug").style.display=$("debug").style.display==="none"?"block":"none";};
  
 /* ---------- helpers ---------- */
@@ -155,7 +169,7 @@ function showPage(id){
   $(id).classList.add("active");
 }
  
-/* ---------- PIN keypad ---------- */
+/* ---------- PIN keypad (home) ---------- */
 document.querySelectorAll("#keypad .key").forEach(btn=>btn.onclick=()=>{
   const act=btn.dataset.act;
   if(act==="clear") $("pin").value="";
@@ -317,14 +331,16 @@ setInterval(()=>{
   });
 },500);
  
-/* --- ADDED (exactly as before) : + button & modal logic --- */
-const FLOW = FLOW_VALIDATE; // alias to match original modal code
- 
+/* --- ADDED exactly as before: + button & modal logic --- */
 $("plusBtn").onclick = async () => {
   $("modalMsg").textContent = "";
   $("pin1").value = $("pin2").value = "";
   $("userSel").innerHTML = "<option>Loading…</option>";
   $("modal").style.display = "flex";
+ 
+  // default target for keypad input
+  window._modalActive = "pin1";
+  $("pin1").focus();
  
   try {
     const r = await fetch(FLOW, {
@@ -343,6 +359,29 @@ $("plusBtn").onclick = async () => {
  
 $("cancel").onclick = () => $("modal").style.display = "none";
  
+/* --- Modal keypad-only entry (disable typing) --- */
+["pin1","pin2"].forEach(id=>{
+  $(id).addEventListener("keydown", e=> e.preventDefault());
+  $(id).addEventListener("input",  e=> e.preventDefault());
+  $(id).addEventListener("click",  ()=> window._modalActive = id);
+});
+ 
+document.querySelectorAll("#modalKeypad .key").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    const targetId = window._modalActive || "pin1";
+    const el = $(targetId);
+    const act = btn.dataset.act;
+    if (!el) return;
+ 
+    if (act === "clear") { el.value = ""; return; }
+    if (act === "del")   { el.value = el.value.slice(0,-1); return; }
+    if (el.value.length < 4 && /^\d$/.test(btn.textContent)) {
+      el.value += btn.textContent;
+    }
+  });
+});
+ 
+/* --- Save handler with pre-check for existing PIN --- */
 $("save").onclick = async () => {
   const name = $("userSel").value;
   const p1 = $("pin1").value.trim(), p2 = $("pin2").value.trim();
@@ -351,50 +390,47 @@ $("save").onclick = async () => {
     return;
   }
  
-// Pre-check: is this PIN already in use?
-$("modalMsg").textContent = "Checking…";
-try {
-  const chk = await fetch(FLOW, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mode: "validatePin", pin: p1 })
-  });
-  const chkData = await chk.json();
+  // Pre-check: is this PIN already in use?
+  $("modalMsg").textContent = "Checking…";
+  try {
+    const chk = await fetch(FLOW, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "validatePin", pin: p1 })
+    });
+    const chkData = await chk.json();
  
-  // If validatePin says success, that PIN already exists in the system
-  if (chkData && chkData.status === "success") {
-    $("modalMsg").textContent = "❌ That PIN is already taken.";
-    return;
+    if (chkData && chkData.status === "success") {
+      $("modalMsg").textContent = "❌ That PIN is already taken.";
+      return;
+    }
+ 
+    // Not taken — proceed to save
+    $("modalMsg").textContent = "Saving…";
+    const r = await fetch(FLOW, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "addPin", name, pin: p1 })
+    });
+    const d = await r.json();
+ 
+    const taken =
+      (d && d.error === "PinAlreadyExists") ||
+      (d && d.message && /already\s*(taken|exists)/i.test(String(d.message)));
+ 
+    if (d && d.status === "success") {
+      $("modalMsg").textContent = "✅ Saved";
+      setTimeout(() => { $("modal").style.display = "none"; }, 1000);
+    } else if (taken || r.status === 409) {
+      $("modalMsg").textContent = "❌ That PIN is already taken.";
+    } else {
+      $("modalMsg").textContent = "❌ Error";
+    }
+  } catch (e) {
+    $("modalMsg").textContent = "Network error";
   }
- 
-  // Not taken — proceed to save
-  $("modalMsg").textContent = "Saving…";
-  const r = await fetch(FLOW, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mode: "addPin", name, pin: p1 })
-  });
-  const d = await r.json();
- 
-  const taken =
-    (d && d.error === "PinAlreadyExists") ||
-    (d && d.message && /already\s*(taken|exists)/i.test(String(d.message)));
- 
-  if (d && d.status === "success") {
-    $("modalMsg").textContent = "✅ Saved";
-    setTimeout(() => { $("modal").style.display = "none"; }, 1000);
-  } else if (taken || r.status === 409) {
-    $("modalMsg").textContent = "❌ That PIN is already taken.";
-  } else {
-    $("modalMsg").textContent = "❌ Error";
-  }
-} catch (e) {
-  $("modalMsg").textContent = "Network error";
-}
- 
 };
 </script>
- 
  
 </body>
 </html>
