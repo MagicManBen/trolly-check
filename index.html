@@ -6,8 +6,9 @@
 <title>CQC – PIN Portal (DEBUG BUILD)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
+h1,h2{margin:0 0 20px}
 /* ---------- core look & feel ---------- */
-body{margin:0;background:#000;color:#fff;font-family:Arial,sans-serif;text-align:center;padding:40px}
+body{margin:0;background:#141314;background:rgba(20,19,20,1);color:#fff;font-family:Arial,sans-serif;text-align:center;padding:40px}
 h1,h2{margin:0 0 20px}
 input,button,select,textarea{font-size:1rem;padding:10px;border:none;border-radius:6px}
 input[type=password],input[type=text]{background:#111;color:#fff;letter-spacing:8px;width:160px;text-align:center}
@@ -23,6 +24,8 @@ button{cursor:pointer;background:#1e8c1e;color:#fff}
 
 /* pressed visual */
 .key.pressed{background:#1e8c1e;color:#fff;transform:scale(0.96)}
+/* login success banner */
+.login-success{display:none;color:#1e8c1e;font-weight:bold;margin-top:8px;font-size:1.1rem}
 
 /* hide scanner inputs but keep them usable */
 .scanner{position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none}
@@ -103,6 +106,7 @@ button.danger{background:#b30000}
 <img id="wristbandImg" class="instruction-img" src="WristBand.png" alt="Attach the wrist strap" />
 <button id="plusBtn" type="button">+</button>
 <div id="status"></div><div id="welcome"></div>
+<div id="loginSuccess" class="login-success">Login successful</div>
 </div>
 
 <!-- Page 2 – BEGIN -->
@@ -111,7 +115,7 @@ button.danger{background:#b30000}
 <div id="qrTitle">Press button once and wait for two beeps</div>
 <img id="doubleBeepImg" class="instruction-img" src="DoubleDeep.png" alt="Wait for two beeps" />
 <div id="qrCode"></div>
-<div id="clickText">After 2 beeps, click here to begin</div>
+<div id="clickText">After 2 beeps, click the BEGIN button below</div>
 <button id="beginBtn" type="button" style="margin-top:8px">Begin</button>
 </div>
 </div>
@@ -262,15 +266,18 @@ $("status").textContent="Checking…";
 try{
 const d=await fetch(FLOW_VALIDATE,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"validatePin",pin:pin})}).then(r=>r.json());
 if(d.status==="success"){
-loggedInUser = d.user?.Name || "";
-$("status").textContent="✅";
-$("welcome").textContent= loggedInUser ? "Welcome, "+loggedInUser : "";
-if (loggedInUser) { $("userBadge").textContent = "User: " + loggedInUser; }
-    setTimeout(()=>{
+  loggedInUser = d.user?.Name || "";
+  $("status").textContent = "✅";
+  $("welcome").textContent = loggedInUser ? "Welcome, "+loggedInUser : "";
+  if (loggedInUser) { $("userBadge").textContent = "User: " + loggedInUser; }
+  // show a clear success signal for 2 seconds
+  $("loginSuccess").style.display = "block";
+  setTimeout(()=>{
     showPage("page2");
+    $("loginSuccess").style.display = "none";
     playDoubleBeep(); // two beeps before begin
-    $("qrCode").innerHTML="";
-    },600);
+    $("qrCode").innerHTML = "";
+  }, 2000);
 } else {
 $("status").textContent="❌ Invalid";
 $("pin").value="";
@@ -324,6 +331,7 @@ showPage("page4");
 $("uploadQr").innerHTML="";
 new QRCode("uploadQr",{text:"^&032&^",width:240,height:240});
 $("visibleBulkInput").value="";
+$("visibleBulkInput").focus();
 capturedScans.clear();
 hasUploadInput=false;
 if(uploadTimer){clearTimeout(uploadTimer); uploadTimer=null;}
@@ -336,19 +344,20 @@ $("scanCount").textContent = capturedScans.size
 : "No scans captured yet.";
 }
 
-/* capture scans offline & debounce upload */
+// Accept scans whether they arrive line-by-line or as a single bulk paste
 $("visibleBulkInput").addEventListener("input", e=>{
-if(e.data?.includes("\n") || e.inputType==="insertLineBreak"){
-addMany(e.target.value);
-e.target.value="";
-}
+  const val = e.target.value;
+  if(/\d{10}/.test(val) || e.data?.includes("\n") || e.inputType==="insertLineBreak"){
+    addMany(val);
+    e.target.value = ""; // clear for more scans
+  }
 });
 $("visibleBulkInput").addEventListener("keydown", e=>{
-if(e.key==="Enter"){
-e.preventDefault();
-addMany(e.target.value);
-e.target.value="";
-}
+  if(e.key==="Enter"){
+    e.preventDefault();
+    addMany(e.target.value);
+    e.target.value="";
+  }
 });
 
 function addMany(text){
