@@ -58,6 +58,19 @@ button{cursor:pointer;background:#1e8c1e;color:#fff}
 
 /* results table */
 #resultTable{width:90%;max-width:600px;color:#000;background:#fff;border-radius:6px;overflow:auto;font-family:Arial,sans-serif;font-size:.9rem;padding:10px}
+/* review table (Page 5) */
+.review-wrap{width:96%;max-width:980px;margin:0 auto}
+.review-note{color:#bbb;margin:6px 0 14px;font-size:.95rem}
+.table{width:100%;border-collapse:collapse;background:#fff;color:#000;border-radius:8px;overflow:hidden}
+.table th,.table td{border:1px solid #ddd;padding:10px;vertical-align:top;text-align:left}
+.table th{background:#f3f3f3}
+.chkline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0}
+.chkline input[type="text"],.chkline input[type="number"],.chkline input[type="search"]{padding:6px 8px;border:1px solid #ccc;border-radius:6px;font-size:.9rem}
+.actions{display:flex;gap:10px;justify-content:center;margin-top:16px}
+#submitChecksBtn{background:#1e8c1e;color:#fff;border-radius:8px;padding:12px 18px;font-size:1.05rem}
+#submitChecksBtn[disabled]{opacity:.6;cursor:not-allowed}
+.success-msg{color:#1e8c1e;font-weight:bold;margin-top:10px}
+.error-msg{color:#ff6961;font-weight:bold;margin-top:10px}
 
 /* + button & modal styles */
 button.danger{background:#b30000}
@@ -153,10 +166,15 @@ button.danger{background:#b30000}
 
 <!-- Page 5 – Results -->
 <div id="page5" class="page">
-<div id="outputPage">
-<h2>Scanned Items</h2>
-<div id="resultTable"></div>
-</div>
+  <div id="outputPage" class="review-wrap">
+    <h2>Review checks before submitting</h2>
+    <div class="review-note">Tick the checks performed. For checks that need a value (e.g. temperature), enter the value next to the tick box. Add comments if needed.</div>
+    <div id="reviewTable"></div>
+    <div class="actions">
+      <button id="submitChecksBtn" type="button" disabled>Submit</button>
+    </div>
+    <div id="submitMsg" aria-live="polite"></div>
+  </div>
 </div>
 
 <!-- + button & modal -->
@@ -220,6 +238,8 @@ let loggedInUser="";
 let uploadTimer=null;
 let hasUploadInput=false;
 let isUploading=false;
+let resolvedItems=[]; // items returned by resolveScans
+let pendingRows=0;   // number of ticked checks ready to submit
 
 /* ---------- debug ---------- */
 function dbg(...m){const log=$("debugLog");log.textContent+=m.join(" ")+"\n";log.parentElement.scrollTop=log.parentElement.scrollHeight;}
@@ -408,70 +428,138 @@ if(percentLabel){ percentLabel.textContent = '100%'; }
 
 /* auto-upload */
 async function doUpload(){
-if (isUploading || !capturedScans.size) return;
-isUploading=true;
+  if (isUploading || !capturedScans.size) return;
+  isUploading=true;
+  // start progress (visual only)
+  startProgress(2000);
+  $("progressText").textContent = "Preparing items…";
+  $("progressAnim").style.display = "flex";
 
-// start 7s visual progress (purely visual; server timing can vary)
-startProgress(7000);
-$("progressText").textContent = "Uploading…";
-$("progressAnim").style.display = "flex";
+  const payload = {
+    SessionID: "SESSION-" + Date.now(),
+    ScannedItemIDs: [...capturedScans]
+  };
 
-const checksPayload = [...capturedScans].map(scanId => {
-const match = itemsData.find(item => String(item.ItemID) === scanId) || {};
-return {
-ScanID: "SCAN-" + scanId,
-ItemID: scanId,
-ItemName: match.ItemName || "Unknown",
-Room: match.Room || "Unknown",
-CheckType: "Audit",
-CheckValue: "Checked"
-};
+  try{
+    const res = await callFlow("resolveScans", payload);
+    // Expecting an array of items with: ItemID, ItemName, Room, Checks[{Name,RequiresValue}]
+    resolvedItems = Array.isArray(res?.items) ? res.items : [];
+  }catch(err){
+    dbg("resolveScans error", err);
+    alert("Couldn't resolve items from scans.");
+    resolvedItems = [];
+  }finally{
+    stopProgress();
+    $("progressAnim").style.display = "none";
+    isUploading=false;
+  }
+
+  // Move to review page either way
+  renderReviewTable();
+  showPage("page5");
+}
+
+
+function renderReviewTable(){
+  const container = $("reviewTable");
+  if(!container) return;
+
+  if(!resolvedItems.length){
+    container.innerHTML = '<div class="error-msg">No known items were resolved from the scans.</div>';
+    $("submitChecksBtn").disabled = true;
+    return;
+  }
+
+  // Build table HTML
+  let html = '<table class="table"><thead><tr>'+
+    '<th style="width:28%">Item name</th>'+
+    '<th style="width:18%">Room</th>'+
+    '<th>Check type(s)</th>'+
+    '</tr></thead><tbody>';
+
+  resolvedItems.forEach((item, i)=>{
+    const checks = Array.isArray(item.Checks) ? item.Checks : [];
+    const lines = checks.map((chk, j)=>{
+      const id = `chk_${i}_${j}`;
+      const needsVal = !!chk.RequiresValue;
+      return `<label class="chkline" for="${id}">`+
+        `<input type="checkbox" data-i="${i}" data-j="${j}" id="${id}" class="rev-chk">`+
+        `<span>${chk.Name}</span>`+
+        (needsVal ? `<input type="text" placeholder="Value" class="rev-val" data-i="${i}" data-j="${j}">` : '')+
+        `<input type="text" placeholder="Comment (optional)" class="rev-cmt" data-i="${i}" data-j="${j}">`+
+      `</label>`;
+    }).join("");
+
+    html += `<tr>`+
+      `<td>${item.ItemName || item.ItemID}</td>`+
+      `<td>${item.Room || ''}</td>`+
+      `<td>${lines || '<em>No checks mapped</em>'}</td>`+
+    `</tr>`;
+  });
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+
+  // Enable submit when at least one checkbox is ticked
+  pendingRows = 0;
+  container.querySelectorAll('.rev-chk').forEach(el=>{
+    el.addEventListener('change', ()=>{
+      pendingRows = [...container.querySelectorAll('.rev-chk')].filter(x=>x.checked).length;
+      $("submitChecksBtn").disabled = pendingRows===0;
+    });
+  });
+}
+
+function buildSubmission(){
+  const rows = [];
+  const table = $("reviewTable");
+  if(!table) return rows;
+
+  table.querySelectorAll('.rev-chk').forEach(chk=>{
+    if(!chk.checked) return;
+    const i = Number(chk.dataset.i), j = Number(chk.dataset.j);
+    const item = resolvedItems[i];
+    const def = (item && Array.isArray(item.Checks) ? item.Checks[j] : null) || {};
+    const valEl = table.querySelector(`.rev-val[data-i="${i}"][data-j="${j}"]`);
+    const cmtEl = table.querySelector(`.rev-cmt[data-i="${i}"][data-j="${j}"]`);
+    const value = valEl ? valEl.value.trim() : "Done";
+    const comment = cmtEl ? cmtEl.value.trim() : "";
+    rows.push({
+      ItemID: String(item?.ItemID || ''),
+      ItemName: item?.ItemName || '',
+      Room: item?.Room || '',
+      CheckType: def.Name || '',
+      CheckValue: value || 'Done',
+      Comment: comment
+    });
+  });
+  return rows;
+}
+
+$("submitChecksBtn").addEventListener("click", async ()=>{
+  const rows = buildSubmission();
+  if(!rows.length){ return; }
+  $("submitChecksBtn").disabled = true;
+  $("submitMsg").textContent = "Submitting…";
+  try{
+    const payload = {
+      SessionID: "SESSION-" + Date.now(),
+      StaffName: loggedInUser || 'PIN User',
+      SubmittedAt: new Date().toISOString(),
+      Rows: rows
+    };
+    const res = await callFlow('submitChecks', payload);
+    if(res && res.status === 'success'){
+      $("submitMsg").innerHTML = `<div class="success-msg">Submitted ${rows.length} check${rows.length>1?'s':''}.</div>`;
+    }else{
+      $("submitMsg").innerHTML = `<div class="error-msg">Submission failed.</div>`;
+      $("submitChecksBtn").disabled = false;
+    }
+  }catch(e){
+    $("submitMsg").innerHTML = `<div class="error-msg">Submission error.</div>`;
+    $("submitChecksBtn").disabled = false;
+  }
 });
-
-const payload = {
-SessionID: "SESSION-" + Date.now(),
-StaffName: "PIN User",
-SubmittedAt: new Date().toISOString(),
-Comment: "Scans submitted via portal",
-Checks: checksPayload
-};
-
-try {
-const res = await callFlow("submitScan", payload);
-if (res?.status === "success") {
-renderResultTable();
-showPage("page5");
-} else {
-dbg("Upload error:", res);
-alert("Error submitting scans.");
-}
-} catch (err) {
-dbg("Upload exception:", err);
-alert("Upload failed.");
-} finally {
-stopProgress();
-$("progressAnim").style.display = "none";
-isUploading=false;
-}
-}
-
-function renderResultTable(){
-const rows = [...capturedScans].map(id=>{
-const item = itemsData.find(x=>String(x.ItemID)===id) || {};
-return `<tr><td>${id}</td><td>${item.Room||''}</td></tr>`;
-}).join("");
-const table = `
-<table style="width:100%;border-collapse:collapse">
-<thead>
-<tr><th style="border:1px solid #444;padding:8px;background:#eee;color:#000">Item ID</th>
-<th style="border:1px solid #444;padding:8px;background:#eee;color:#000">Room</th></tr>
-</thead>
-<tbody>
-${rows}
-</tbody>
-</table>`;
-$("resultTable").innerHTML = table;
-}
 
 /* ---------- keep focus on inputs ---------- */
 setInterval(()=>{
