@@ -73,6 +73,7 @@ button.danger{background:#b30000}
 /* page 2 spacing */
 #qrCodeWrapper{gap:28px}
 #clickText{margin-top:28px}
+#qrImage{width:240px;max-width:80vw;height:auto;border-radius:6px}
 </style>
 </head>
 <body>
@@ -94,8 +95,8 @@ button.danger{background:#b30000}
 <!-- Page 2 – BEGIN -->
 <div id="page2" class="page">
   <div id="qrCodeWrapper">
-    <div id="qrTitle">First scan this QR code</div>
-    <div id="qrCode"></div>
+    <div id="qrTitle">Press the button on scanner once</div>
+    <img id="qrImage" src="DoubleDeep.png" alt="Press the button on scanner once" />
     <div id="clickText">After 2 beeps, click here to begin</div>
     <button id="beginBtn" type="button" style="margin-top:8px">Begin</button>
   </div>
@@ -223,6 +224,9 @@ function showPage(id){
   } else {
     $("userBadge").style.display = "none";
   }
+  // Show green + button only on Page 1
+  const plus = $("plusBtn");
+  if(plus){ plus.style.display = (id === "page1") ? "inline-block" : "none"; }
 }
 
 // ----- Keypad binder -----
@@ -254,8 +258,7 @@ async function validatePin(pin){
       setTimeout(()=>{
         showPage("page2");
         playDoubleBeep(); // two beeps before begin
-        $("qrCode").innerHTML="";
-        new QRCode("qrCode",{text:"^&006&^",width:200,height:200});
+        // QR code generation removed for Page 2
       },600);
     } else {
       $("status").textContent="❌ Invalid";
