@@ -75,10 +75,32 @@ button.danger{background:#b30000}
 #clickText{margin-top:28px}
 #qrImage{width:360px;max-width:90vw;height:auto;border-radius:6px}
 #wristImage{width:360px;max-width:90vw;height:auto;border-radius:6px;margin-top:12px}
+</style>
 #scanTrollyImage{width:320px;max-width:90vw;height:auto;border-radius:6px;margin:10px 0 14px}
+
+/* iPad layout wrapper */
+#appWrap{width:100%;max-width:1024px;margin:0 auto;min-height:100dvh;display:flex;flex-direction:column}
+@supports (height: 100dvh){ #appWrap{ min-height:100dvh; } }
+@media (orientation:landscape){ #appWrap{max-width:1024px} }
+
+/* page content width */
+.page{padding:0 20px}
+
+/* page 2 side-by-side images */
+.img-row{display:flex;gap:16px;align-items:flex-start;justify-content:center;flex-wrap:wrap;margin-top:8px}
+.img-row img{flex:1 1 320px;max-width:46%;height:auto}
+
+/* bigger Begin button */
+#beginBtn{font-size:1.25rem;padding:16px 28px;border-radius:12px;background:#1e8c1e;color:#fff;border:none;box-shadow:0 0 0 2px #1e8c1e33 inset;transition:transform .05s ease, box-shadow .2s ease}
+#beginBtn:active{transform:scale(.98)}
+
+/* optional background keying (approximate) */
+.keyout{background:#141314;mix-blend-mode:lighten;filter:contrast(110%) brightness(110%)}
+</style>
 </style>
 </head>
 <body>
+<div id="appWrap">
 
 <!-- Page 1 – PIN -->
 <div id="page1" class="page active">
@@ -98,8 +120,10 @@ button.danger{background:#b30000}
 <div id="page2" class="page">
   <div id="qrCodeWrapper">
     <div id="qrTitle">Press the button on scanner once</div>
-    <img id="qrImage" src="DoubleDeep.png" alt="Press the button on scanner once" />
-    <img id="wristImage" src="WristBand.png" alt="Wrist band instructions" />
+    <div class="img-row">
+      <img id="wristImage" class="keyout" src="WristBand.png" alt="Wrist band instructions" />
+      <img id="qrImage" class="keyout" src="DoubleDeep.png" alt="Press the button on scanner once" />
+    </div>
     <div id="clickText">After 2 beeps, click here to begin</div>
     <button id="beginBtn" type="button" style="margin-top:8px">Begin</button>
   </div>
@@ -560,5 +584,6 @@ $("save").onclick = async () => {
 });
 </script>
 
+</div>
 </body>
 </html>
