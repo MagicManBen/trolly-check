@@ -16,10 +16,13 @@ button{cursor:pointer;background:#1e8c1e;color:#fff}
 #welcome{margin-top:10px;font-size:1.2rem;color:#1e8c1e}
 
 /* keypad */
-#keypad{margin:25px auto 10px;display:grid;grid-template-columns:repeat(3,60px);gap:8px;justify-content:center}
-#keypad .key{background:#333;color:#fff;border-radius:6px;font-size:1.1rem;padding:12px 0;user-select:none}
+#keypad{margin:25px auto 10px;display:grid;grid-template-columns:repeat(3,80px);gap:10px;justify-content:center}
+#keypad .key{background:#333;color:#fff;border-radius:8px;font-size:1.3rem;padding:16px 0;user-select:none;transition:transform .05s ease, background .05s ease}
 #keypad .wide{grid-column:span 3}
 #keypad .zero{grid-column:2}
+
+/* pressed visual */
+.key.pressed{background:#1e8c1e;color:#fff;transform:scale(0.96)}
 
 /* hide scanner inputs but keep them usable */
 .scanner{position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none}
@@ -42,7 +45,12 @@ button{cursor:pointer;background:#1e8c1e;color:#fff}
 .spinner{width:80px;height:80px;border:10px solid #1e8c1e;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 #uploadText{margin-top:12px;font-size:1.2rem;color:#1e8c1e;font-weight:bold}
-#progressAnim .spinner{border-top-color:#fff}
+/* progress ring */
+.progress-ring{position:relative;width:120px;height:120px}
+.progress-ring svg{transform:rotate(-90deg)}
+.progress-ring__bg{stroke:#333;stroke-width:10;fill:none}
+.progress-ring__circle{stroke:#1e8c1e;stroke-width:10;fill:none;stroke-linecap:round;transition:stroke-dashoffset .1s linear}
+.progress-ring__label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:bold}
 #progressText{margin-top:14px;font-size:1.4rem;color:#fff;font-weight:bold}
 
 /* results table */
@@ -56,8 +64,8 @@ button.danger{background:#b30000}
 #box select,#box input{width:100%;margin:6px 0}
 
 /* modal keypad */
-#modalKeypad{margin:10px auto;display:grid;grid-template-columns:repeat(3,60px);gap:8px;justify-content:center}
-#modalKeypad .key{background:#333;color:#fff;border-radius:6px;font-size:1.1rem;padding:12px 0;user-select:none}
+#modalKeypad{margin:10px auto;display:grid;grid-template-columns:repeat(3,80px);gap:10px;justify-content:center}
+#modalKeypad .key{background:#333;color:#fff;border-radius:8px;font-size:1.3rem;padding:16px 0;user-select:none;transition:transform .05s ease, background .05s ease}
 
 /* user badge — bottom center */
 .user-badge{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);color:#aaa;background:transparent;padding:0;border-radius:0;font-size:.95rem;opacity:1;z-index:9999;display:none}
@@ -88,7 +96,7 @@ button.danger{background:#b30000}
   <div id="qrCodeWrapper">
     <div id="qrTitle">First scan this QR code</div>
     <div id="qrCode"></div>
-    <div id="clickText">Then click here to begin</div>
+    <div id="clickText">After 2 beeps, click here to begin</div>
     <button id="beginBtn" type="button" style="margin-top:8px">Begin</button>
   </div>
 </div>
@@ -111,7 +119,16 @@ button.danger{background:#b30000}
     <input id="visibleBulkInput" autocomplete="off">
     <div id="scanCount">No scans captured yet.</div>
     <div id="uploadAnim"><div class="spinner"></div><div id="uploadText">Uploading…</div></div>
-    <div id="progressAnim"><div class="spinner"></div><div id="progressText">Processing…</div></div>
+    <div id="progressAnim">
+      <div class="progress-ring">
+        <svg width="120" height="120">
+          <circle class="progress-ring__bg" cx="60" cy="60" r="52"></circle>
+          <circle class="progress-ring__circle" cx="60" cy="60" r="52"></circle>
+        </svg>
+        <div class="progress-ring__label" id="progressPercent">0%</div>
+      </div>
+      <div id="progressText">Uploading…</div>
+    </div>
   </div>
 </div>
 
@@ -158,6 +175,26 @@ const FLOW = FLOW_VALIDATE;
 
 const $=id=>document.getElementById(id);
 
+// --- audio helpers ---
+let audioCtx=null;
+function playBeep(freq=600, duration=120, volume=0.2){
+  try{
+    if(!audioCtx){ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.value = volume;
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start();
+    setTimeout(()=>{ try{osc.stop();}catch{} }, duration);
+  }catch{}
+}
+function playDoubleBeep(){
+  playBeep(800,120,0.25);
+  setTimeout(()=>playBeep(1000,120,0.25), 220);
+}
+
 /* ---------- state ---------- */
 let capturedScans=new Set();
 let itemsData=[];
@@ -191,10 +228,16 @@ function showPage(id){
 
 // ----- Keypad binder -----
 function bindKeypad(selector, onpress){
-  const evt = window.PointerEvent ? 'pointerdown' : 'click';
+  const downEvt = window.PointerEvent ? 'pointerdown' : 'mousedown';
+  const upEvt = window.PointerEvent ? 'pointerup' : 'mouseup';
+  const leaveEvt = window.PointerEvent ? 'pointerleave' : 'mouseleave';
   document.querySelectorAll(selector).forEach(btn=>{
-    const handler=(e)=>{ e.preventDefault(); onpress(btn); };
-    btn.addEventListener(evt, handler, { passive:false });
+    const downHandler=(e)=>{ e.preventDefault(); btn.classList.add('pressed'); playBeep(); onpress(btn); };
+    const upHandler=()=>{ btn.classList.remove('pressed'); };
+    const leaveHandler=()=>{ btn.classList.remove('pressed'); };
+    btn.addEventListener(downEvt, downHandler, { passive:false });
+    btn.addEventListener(upEvt, upHandler);
+    btn.addEventListener(leaveEvt, leaveHandler);
   });
 }
 
@@ -211,6 +254,7 @@ async function validatePin(pin){
       if (loggedInUser) { $("userBadge").textContent = "User: " + loggedInUser; }
       setTimeout(()=>{
         showPage("page2");
+        playDoubleBeep(); // two beeps before begin
         $("qrCode").innerHTML="";
         new QRCode("qrCode",{text:"^&006&^",width:200,height:200});
       },600);
@@ -234,22 +278,23 @@ bindKeypad('#keypad .key', (btn)=>{
   }
 });
 
-/* ---------- Page 2: Begin ---------- */
-$("beginBtn").addEventListener("click", async ()=>{
-  try {
-    const items = await callFlow("listItems");
-    itemsData = Array.isArray(items)? items : [];
-    dbg("Fetched items:", itemsData.length);
-  } catch(err){
-    dbg("Error fetching items:", err);
-  }
+/* ---------- Page 2: Begin (instant) ---------- */
+$("beginBtn").addEventListener("click", ()=>{
+  playBeep(900,140,0.25);
+
+  // Instant navigation to page 3
   showPage("page3");
   $("auditMsg").textContent = "Audit in progress — you can now begin scanning items for the audit.";
   $("auditVisual").style.display = "block";
   $("qrCodeAudit").innerHTML="";
-  setTimeout(()=>{
-    showUploadPage();
-  },30000);
+
+  // Fetch items in the background
+  callFlow("listItems")
+    .then(items=>{ itemsData = Array.isArray(items)? items : []; dbg("Fetched items:", itemsData.length); })
+    .catch(err=>{ dbg("Error fetching items:", err); });
+
+  // Keep existing 30s transition to upload page
+  setTimeout(()=>{ showUploadPage(); },30000);
 });
 
 /* ---------- Page 3: DONE (still supported if scanner sends DONE) ---------- */
@@ -305,7 +350,38 @@ function addMany(text){
 function scheduleAutoUpload(){
   if(!hasUploadInput) return;
   if(uploadTimer) clearTimeout(uploadTimer);
-  uploadTimer=setTimeout(()=>{ doUpload(); },2000);
+  uploadTimer=setTimeout(()=>{ doUpload(); },2000); // keep 2s no-input debounce
+}
+
+/* --- 0–100% progress ring helpers (7s) --- */
+let _progressTimer=null, _progressStart=0, _progressCircumference=0;
+function startProgress(durationMs=7000){
+  const circle = document.querySelector('.progress-ring__circle');
+  const percentLabel = $("progressPercent");
+  if(!circle || !percentLabel) return;
+  const radius = circle.r.baseVal.value;
+  _progressCircumference = 2 * Math.PI * radius;
+  circle.style.strokeDasharray = `${_progressCircumference} ${_progressCircumference}`;
+  circle.style.strokeDashoffset = `${_progressCircumference}`;
+  _progressStart = performance.now();
+  $("progressAnim").style.display = "flex";
+  cancelAnimationFrame(_progressTimer);
+  const tick = (now)=>{
+    const elapsed = now - _progressStart;
+    const p = Math.min(1, elapsed / durationMs);
+    const offset = _progressCircumference * (1 - p);
+    circle.style.strokeDashoffset = `${offset}`;
+    percentLabel.textContent = `${Math.round(p*100)}%`;
+    if(p < 1){ _progressTimer = requestAnimationFrame(tick); }
+  };
+  _progressTimer = requestAnimationFrame(tick);
+}
+function stopProgress(){
+  cancelAnimationFrame(_progressTimer);
+  const circle = document.querySelector('.progress-ring__circle');
+  const percentLabel = $("progressPercent");
+  if(circle){ circle.style.strokeDashoffset = 0; }
+  if(percentLabel){ percentLabel.textContent = '100%'; }
 }
 
 /* auto-upload */
@@ -313,6 +389,11 @@ async function doUpload(){
   if (isUploading || !capturedScans.size) return;
   isUploading=true;
   $("uploadAnim").style.display = "flex";
+
+  // start 7s visual progress (purely visual; server timing can vary)
+  startProgress(7000);
+  $("progressText").textContent = "Uploading…";
+  $("progressAnim").style.display = "flex";
 
   const checksPayload = [...capturedScans].map(scanId => {
     const match = itemsData.find(item => String(item.ItemID) === scanId) || {};
@@ -347,6 +428,8 @@ async function doUpload(){
     dbg("Upload exception:", err);
     alert("Upload failed.");
   } finally {
+    stopProgress();
+    $("progressAnim").style.display = "none";
     $("uploadAnim").style.display = "none";
     isUploading=false;
   }
@@ -377,7 +460,7 @@ setInterval(()=>{
   });
 },500);
 
-/* + modal logic (unchanged) */
+/* + modal logic */
 $("plusBtn").onclick = async () => {
   $("modalMsg").textContent = "";
   $("pin1").value = $("pin2").value = "";
@@ -424,6 +507,7 @@ bindKeypad('#modalKeypad .key', (btn)=>{
 
 /* Save with pre-check */
 $("save").onclick = async () => {
+  playBeep();
   const name = $("userSel").value;
   const p1 = $("pin1").value.trim(), p2 = $("pin2").value.trim();
   if (p1 !== p2 || p1.length !== 4 || isNaN(p1)) {
@@ -464,6 +548,12 @@ $("save").onclick = async () => {
     $("modalMsg").textContent = "Network error";
   }
 };
+
+/* generic button sounds */
+["plusBtn","save","cancel"].forEach(id=>{
+  const el=$(id);
+  if(el){ el.addEventListener('pointerdown', ()=>playBeep()); }
+});
 </script>
 
 </body>
