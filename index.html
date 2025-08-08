@@ -41,7 +41,7 @@ button{cursor:pointer;background:#1e8c1e;color:#fff}
 /* upload page elements */
 @keyframes glowEdge{from{box-shadow:0 0 6px #1e8c1e}to{box-shadow:0 0 20px #1e8c1e}}
 .scanning{animation:glowEdge .5s ease-in-out infinite alternate;border:2px solid #1e8c1e!important}
-#uploadAnim,#progressAnim{display:none;flex-direction:column;align-items:center;margin-top:20px}
+#progressAnim{display:none;flex-direction:column;align-items:center;margin-top:20px}
 .spinner{width:80px;height:80px;border:10px solid #1e8c1e;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 #uploadText{margin-top:12px;font-size:1.2rem;color:#1e8c1e;font-weight:bold}
@@ -118,7 +118,6 @@ button.danger{background:#b30000}
     <div id="uploadQr"></div>
     <input id="visibleBulkInput" autocomplete="off">
     <div id="scanCount">No scans captured yet.</div>
-    <div id="uploadAnim"><div class="spinner"></div><div id="uploadText">Uploading…</div></div>
     <div id="progressAnim">
       <div class="progress-ring">
         <svg width="120" height="120">
@@ -388,7 +387,6 @@ function stopProgress(){
 async function doUpload(){
   if (isUploading || !capturedScans.size) return;
   isUploading=true;
-  $("uploadAnim").style.display = "flex";
 
   // start 7s visual progress (purely visual; server timing can vary)
   startProgress(7000);
@@ -430,7 +428,6 @@ async function doUpload(){
   } finally {
     stopProgress();
     $("progressAnim").style.display = "none";
-    $("uploadAnim").style.display = "none";
     isUploading=false;
   }
 }
