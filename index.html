@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>CQC – PIN Portal (DEBUG BUILD)</title>
+<title>CQC – PIN Portal</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 /* ---------- core look & feel ---------- */
@@ -17,31 +17,33 @@ button{cursor:pointer;background:#1e8c1e;color:#fff}
 
 /* keypad */
 #keypad{margin:25px auto 10px;display:grid;grid-template-columns:repeat(3,120px);gap:16px;justify-content:center}
-#keypad .key{background:#333;color:#fff;border-radius:10px;font-size:1.6rem;padding:22px 0;user-select:none;transition:transform .05s ease, background .05s ease, box-shadow .05s ease}
+#keypad .key{background:#333;color:#fff;border-radius:10px;font-size:1.6rem;padding:22px 0;user-select:none;transition:transform .05s ease, background .05s ease, box-shadow .05s ease; position:relative; overflow:hidden}
 #keypad .wide{grid-column:span 3}
 #keypad .zero{grid-column:2}
 
-/* pressed visual */
+/* pressed visual + ripple */
 .key.pressed{background:#1e8c1e;color:#fff;transform:scale(0.96);box-shadow:0 0 0 3px rgba(30,140,30,.35) inset}
+.key::after{content:"";position:absolute;left:var(--x,50%);top:var(--y,50%);width:12px;height:12px;border-radius:50%;transform:translate(-50%,-50%) scale(0);opacity:.5;background:radial-gradient(circle, rgba(30,140,30,.6), rgba(30,140,30,0));transition:transform .35s ease, opacity .5s ease}
+.key.rippling::after{transform:translate(-50%,-50%) scale(12);opacity:0}
 
 /* hide scanner inputs but keep them usable */
 .scanner{position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none}
 #visibleBulkInput{position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none}
 
-/* debug panel (button removed) */
-#debug{position:fixed;bottom:80px;left:20px;width:300px;max-height:50vh;overflow:auto;background:#111;padding:10px;border:1px solid #555;border-radius:8px;font-family:Consolas,monospace;font-size:.75rem;display:none}
-#debug pre{margin:0;white-space:pre-wrap}
-
 /* pages */
 .page{display:none}
 .active{display:block}
 
+/* wrappers */
 #qrCodeWrapper,#auditMsgWrapper,#doneScreen,#outputPage{display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh}
+
 /* iPad-friendly sizing & images on Page 2 */
 #imagesRow{display:flex;gap:20px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:10px}
 #imagesRow img{max-width:42vw;height:auto;border-radius:8px}
+
 /* Begin button bigger and site style */
 #beginBtn{font-size:1.2rem;padding:14px 28px;border-radius:8px;background:#fff;color:#000}
+
 /* Page 3 ScanTrolly image */
 #scanTrollyImg{margin:14px 0;max-width:80%;height:auto;border-radius:8px}
 
@@ -49,15 +51,15 @@ button{cursor:pointer;background:#1e8c1e;color:#fff}
 @keyframes glowEdge{from{box-shadow:0 0 6px #1e8c1e}to{box-shadow:0 0 20px #1e8c1e}}
 .scanning{animation:glowEdge .5s ease-in-out infinite alternate;border:2px solid #1e8c1e!important}
 #progressAnim{display:none;flex-direction:column;align-items:center;margin-top:20px}
-.spinner{width:80px;height:80px;border:10px solid #1e8c1e;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
 #uploadText{margin-top:12px;font-size:1.2rem;color:#1e8c1e;font-weight:bold}
-/* progress ring */
-.progress-ring{position:relative;width:120px;height:120px}
-.progress-ring svg{transform:rotate(-90deg)}
-.progress-ring__bg{stroke:#333;stroke-width:10;fill:none}
-.progress-ring__circle{stroke:#1e8c1e;stroke-width:10;fill:none;stroke-linecap:round;transition:stroke-dashoffset .1s linear}
-.progress-ring__label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:bold}
+
+/* conic progress ring (replaces spinner) */
+.conic-wrap{position:relative;width:140px;height:140px;border-radius:50%;display:grid;place-items:center}
+.conic-ring{--p:0;position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(#1e8c1e var(--p), rgba(255,255,255,.08) 0);
+  mask: radial-gradient(circle 56px at 50% 50%, transparent 56px, black 58px);
+  -webkit-mask: radial-gradient(circle 56px at 50% 50%, transparent 56px, black 58px)}
+.conic-label{position:relative;font-weight:bold}
 #progressText{margin-top:14px;font-size:1.4rem;color:#fff;font-weight:bold}
 
 /* results table */
@@ -80,9 +82,50 @@ button.danger{background:#b30000}
 /* page 2 spacing */
 #qrCodeWrapper{gap:28px}
 #clickText{margin-top:28px}
+
+/* --- polish & motion --- */
+@media (prefers-reduced-motion:no-preference){
+  .fade-in{animation:fadeInUp .22s ease-out forwards}
+  @keyframes fadeInUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .pulse{animation:pulse 1.4s ease-in-out infinite}
+  @keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.04)}100%{transform:scale(1)}}
+  .glow{animation:glowEdge 1.2s ease-in-out infinite alternate}
+}
+@media (prefers-reduced-motion:reduce){ .fade-in,.pulse,.glow{animation:none!important}}
+
+/* frosted “cards” */
+.card{background:rgba(34,34,34,.55);border:1px solid rgba(255,255,255,.06);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-radius:12px;padding:22px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+
+/* top audit progress bar (Page 3) */
+#auditBar{position:fixed;left:0;top:0;width:100%;height:3px;background:linear-gradient(90deg,#1e8c1e 0%,#3ad53a 50%,#1e8c1e 100%);background-size:200% 100%;z-index:9999;display:none}
+@media (prefers-reduced-motion:no-preference){#auditBar.running{animation:auditRun 1.2s linear infinite}}
+@keyframes auditRun{to{background-position:-200% 0}}
+
+/* user badge slide-in */
+.user-badge.show{animation:badgeIn .25s ease-out forwards}
+@keyframes badgeIn{from{transform:translate(-50%,20px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+
+/* help chips + steps */
+.chip{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:20px;background:#1b1b1b;border:1px solid #2a2a2a;font-size:.85rem;color:#ddd}
+.steps{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.steps .chip.active{border-color:#1e8c1e;color:#fff}
+
+/* audio toggle + sparkles canvas */
+#audioToggle{position:fixed;top:12px;right:12px;background:#222;border:1px solid #333;border-radius:8px;padding:6px 10px;z-index:9999}
+#fx{position:fixed;inset:0;z-index:0;opacity:.16;pointer-events:none}
+main{position:relative;z-index:1}
+
+/* success tick draw */
+#tickPath{stroke-dasharray:60;stroke-dashoffset:60}
+.drawn #tickPath{transition:stroke-dashoffset .6s ease-out;stroke-dashoffset:0}
 </style>
 </head>
 <body>
+
+<div id="auditBar"></div>
+<button id="audioToggle" aria-pressed="false" title="Sound on/off">🔊</button>
+<canvas id="fx"></canvas>
+<main>
 
 <!-- Page 1 – PIN -->
 <div id="page1" class="page active">
@@ -100,23 +143,32 @@ button.danger{background:#b30000}
 
 <!-- Page 2 – BEGIN -->
 <div id="page2" class="page">
-<div id="qrCodeWrapper">
+<div id="qrCodeWrapper" class="card">
 <div id="qrTitle">Press the button on scanner once</div>
+
+<div class="steps">
+  <div class="chip" id="step1">1. Storage mode</div>
+  <div class="chip" id="step2">2. Scan items</div>
+  <div class="chip" id="step3">3. Upload</div>
+</div>
+
 <div id="imagesRow">
-  <img id="wristImg" src="WristBand.png" alt="Wrist band">
-  <img id="doubleDeepImg" src="DoubleDeep.png" alt="Press button">
+  <img id="wristImg" src="WristBand2.png" alt="Wrist band">
+  <img id="doubleDeepImg" src="DoubleDeep2.png" alt="Press button">
 </div>
 <div id="clickText">After 2 beeps, click here to begin</div>
-<button id="beginBtn" type="button" style="margin-top:8px">Begin</button>
+<button id="beginBtn" type="button" class="pulse" style="margin-top:8px">Begin</button>
 </div>
 </div>
 
 <!-- Page 3 – Audit -->
 <div id="page3" class="page">
-<div id="auditMsgWrapper">
+<div id="auditMsgWrapper" class="card">
 <h2 id="auditMsg">Audit in progress</h2>
-<img id="scanTrollyImg" src="ScanTrolly.png" alt="Scan Trolly">
-<div id="auditVisual" class="spinner" style="border-top-color:#0000"></div>
+<img id="scanTrollyImg" src="ScanTrolly2.png" alt="Scan Trolly">
+<!-- keep spinner here for page 3 status (not on upload page) -->
+<div id="auditVisual" class="spinner" style="width:80px;height:80px;border:10px solid #1e8c1e;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></div>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 <div id="qrCodeAudit" style="margin-top:20px;"></div>
 </div>
 <input id="hiddenScanner3" class="scanner" type="text" autocomplete="off">
@@ -124,27 +176,28 @@ button.danger{background:#b30000}
 
 <!-- Page 4 – Upload -->
 <div id="page4" class="page">
-<div id="doneScreen">
+<div id="doneScreen" class="card">
 <h2>Scan here to upload:</h2>
 <div id="uploadQr"></div>
 <input id="visibleBulkInput" autocomplete="off">
 <div id="scanCount">No scans captured yet.</div>
 <div id="progressAnim">
-<div class="progress-ring">
-<svg width="120" height="120">
-<circle class="progress-ring__bg" cx="60" cy="60" r="52"></circle>
-<circle class="progress-ring__circle" cx="60" cy="60" r="52"></circle>
-</svg>
-<div class="progress-ring__label" id="progressPercent">0%</div>
-</div>
-<div id="progressText">Uploading…</div>
+  <div class="conic-wrap">
+    <div class="conic-ring" id="conicRing" style="--p:0deg"></div>
+    <div class="conic-label" id="progressPercent">0%</div>
+  </div>
+  <div id="progressText">Uploading…</div>
 </div>
 </div>
 </div>
 
 <!-- Page 5 – Results -->
 <div id="page5" class="page">
-<div id="outputPage">
+<div id="outputPage" class="card">
+<svg id="doneTick" width="80" height="80" viewBox="0 0 52 52" aria-hidden="true" style="margin-bottom:12px;display:none">
+  <circle cx="26" cy="26" r="24" fill="none" stroke="#1e8c1e" stroke-width="2" opacity=".3"></circle>
+  <path id="tickPath" d="M14 27 L23 35 L38 18" fill="none" stroke="#1e8c1e" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
 <h2>Scanned Items</h2>
 <div id="resultTable"></div>
 </div>
@@ -174,8 +227,13 @@ button.danger{background:#b30000}
 <!-- User badge -->
 <div id="userBadge" class="user-badge"></div>
 
+<!-- Offline banner -->
+<div id="netBanner" class="chip" style="display:none;position:fixed;top:12px;left:12px;z-index:9999">📶 Offline — scans will be saved</div>
+
 <!-- Debug -->
-<div id="debug"><pre id="debugLog"></pre></div>
+<div id="debug" style="display:none"><pre id="debugLog"></pre></div>
+
+</main>
 
 <script>
 /* ---------- constants ---------- */
@@ -185,25 +243,32 @@ const FLOW = FLOW_VALIDATE;
 
 const $=id=>document.getElementById(id);
 
-// --- audio helpers ---
-let audioCtx=null;
-function playBeep(freq=600, duration=120, volume=0.2){
-try{
-if(!audioCtx){ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }
-const osc = audioCtx.createOscillator();
-const gain = audioCtx.createGain();
-osc.type = 'sine';
-osc.frequency.value = freq;
-gain.gain.value = volume;
-osc.connect(gain); gain.connect(audioCtx.destination);
-osc.start();
-setTimeout(()=>{ try{osc.stop();}catch{} }, duration);
-}catch{}
+/* ---- audio helpers with mute toggle (iPad-safe after user gesture) ---- */
+let audioCtx=null; let muted = localStorage.getItem('muted')==='1';
+function ensureCtx(){ if(!audioCtx){ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); } }
+function tone(freq=600, ms=120, vol=0.2, type='sine'){
+  if(muted) return;
+  try{ ensureCtx(); const o=audioCtx.createOscillator(); const g=audioCtx.createGain();
+    o.type=type; o.frequency.value=freq; g.gain.value=vol; o.connect(g); g.connect(audioCtx.destination);
+    o.start(); setTimeout(()=>{ try{o.stop();}catch{} }, ms);
+  }catch{}
 }
-function playDoubleBeep(){
-playBeep(800,120,0.25);
-setTimeout(()=>playBeep(1000,120,0.25), 220);
+function earcon(name){
+  const map={
+    digit:()=>tone(700,90,0.15,'sine'),
+    clear:()=>tone(250,120,0.18,'square'),
+    success:()=>{tone(900,100,0.22,'sine'); setTimeout(()=>tone(1100,120,0.22,'sine'),120);},
+    error:()=>tone(160,180,0.22,'square'),
+    begin:()=>tone(820,140,0.2,'triangle'),
+    uploadStart:()=>tone(500,120,0.18,'sine'),
+    uploadDone:()=>{tone(880,120,0.2,'sine'); setTimeout(()=>tone(1200,140,0.2,'sine'),130);}
+  };
+  (map[name]||(()=>{}))();
 }
+function playDoubleBeep(){ if(muted) return; earcon('success'); }
+const audioBtn = document.getElementById('audioToggle');
+function syncMuteBtn(){ if(!audioBtn) return; audioBtn.textContent = muted? '🔈' : '🔊'; audioBtn.setAttribute('aria-pressed', (!muted).toString()); }
+if(audioBtn){ audioBtn.addEventListener('click', ()=>{ muted=!muted; localStorage.setItem('muted', muted?'1':'0'); syncMuteBtn(); earcon('success'); }); syncMuteBtn(); }
 
 /* ---------- state ---------- */
 let capturedScans=new Set();
@@ -214,242 +279,250 @@ let hasUploadInput=false;
 let isUploading=false;
 
 /* ---------- debug ---------- */
-function dbg(...m){const log=$("debugLog");log.textContent+=m.join(" ")+"\n";log.parentElement.scrollTop=log.parentElement.scrollHeight;}
+function dbg(...m){const log=$("debugLog"); if(!log) return; log.textContent+=m.join(" ")+"\n"; log.parentElement.scrollTop=log.parentElement.scrollHeight;}
 
 /* ---------- helpers ---------- */
 function callFlow(mode,payload={}) {
-return fetch(`${FLOW_BASE}&mode=${mode}`,{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({mode,...payload})
-}).then(r=>r.json());
-}
-function showPage(id){
-document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
-$(id).classList.add("active");
-// Show logged-in user badge on pages 2+ only
-if (id !== "page1" && loggedInUser) {
-$("userBadge").textContent = "User: " + loggedInUser;
-$("userBadge").style.display = "block";
-} else {
-$("userBadge").style.display = "none";
-}
-// Show + button only on Page 1
-const plus=$("plusBtn");
-if(plus){ plus.style.display = (id === "page1") ? "block" : "none"; }
+  return fetch(`${FLOW_BASE}&mode=${mode}`,{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({mode,...payload})
+  }).then(r=>r.json());
 }
 
-// ----- Keypad binder -----
+/* page switching + visuals */
+function showPage(id){
+  document.querySelectorAll('.page').forEach(p=>{ p.classList.remove('active'); p.style.display='none'; });
+  const el=$(id); el.style.display='block'; el.classList.add('active','fade-in');
+  // user badge
+  if (id !== 'page1' && loggedInUser) {
+    const ub=$('userBadge'); ub.textContent = 'User: ' + loggedInUser; ub.style.display='block'; ub.classList.add('show');
+  } else { $('userBadge').style.display='none'; }
+  // + button only page1
+  const plus=$('plusBtn'); if(plus){ plus.style.display = (id==='page1')?'block':'none'; }
+  // audit top bar page3
+  const bar=$('auditBar'); bar.style.display = (id==='page3') ? 'block' : 'none'; if(id==='page3'){ bar.classList.add('running'); } else { bar.classList.remove('running'); }
+}
+
+/* ----- Keypad binder with ripple + long-press clear ----- */
 function bindKeypad(selector, onpress){
-const downEvt = window.PointerEvent ? 'pointerdown' : 'mousedown';
-const upEvt = window.PointerEvent ? 'pointerup' : 'mouseup';
-const leaveEvt = window.PointerEvent ? 'pointerleave' : 'mouseleave';
-document.querySelectorAll(selector).forEach(btn=>{
-const downHandler=(e)=>{ e.preventDefault(); btn.classList.add('pressed'); playBeep(); onpress(btn); };
-const upHandler=()=>{ btn.classList.remove('pressed'); };
-const leaveHandler=()=>{ btn.classList.remove('pressed'); };
-btn.addEventListener(downEvt, downHandler, { passive:false });
-btn.addEventListener(upEvt, upHandler);
-btn.addEventListener(leaveEvt, leaveHandler);
-});
+  const downEvt = window.PointerEvent ? 'pointerdown' : 'mousedown';
+  const upEvt = window.PointerEvent ? 'pointerup' : 'mouseup';
+  const leaveEvt = window.PointerEvent ? 'pointerleave' : 'mouseleave';
+  document.querySelectorAll(selector).forEach(btn=>{
+    let holdTimer=null;
+    const downHandler=(e)=>{
+      e.preventDefault();
+      const rect=btn.getBoundingClientRect();
+      btn.style.setProperty('--x', (e.clientX-rect.left)+'px');
+      btn.style.setProperty('--y', (e.clientY-rect.top)+'px');
+      btn.classList.add('pressed','rippling');
+      if(btn.dataset.act==='clear'){
+        btn.classList.add('glow');
+        holdTimer=setTimeout(()=>{ onpress(btn, true); earcon('clear'); },600);
+      } else { earcon('digit'); onpress(btn,false); }
+    };
+    const upHandler=()=>{ btn.classList.remove('pressed','rippling','glow'); if(holdTimer){ clearTimeout(holdTimer); holdTimer=null; } };
+    const leaveHandler=upHandler;
+    btn.addEventListener(downEvt, downHandler, { passive:false });
+    btn.addEventListener(upEvt, upHandler);
+    btn.addEventListener(leaveEvt, leaveHandler);
+  });
 }
 
 let pinSubmitting=false;
 async function validatePin(pin){
-if(pinSubmitting) return; pinSubmitting=true;
-$("status").textContent="Checking…";
-try{
-const d=await fetch(FLOW_VALIDATE,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"validatePin",pin:pin})}).then(r=>r.json());
-if(d.status==="success"){
-loggedInUser = d.user?.Name || "";
-$("status").textContent="✅";
-$("welcome").textContent= loggedInUser ? "Welcome, "+loggedInUser : "";
-if (loggedInUser) { $("userBadge").textContent = "User: " + loggedInUser; }
-setTimeout(()=>{
-showPage("page2");
-playDoubleBeep();
-},600);
-} else {
-$("status").textContent="❌ Invalid";
-$("pin").value="";
-}
-}catch{
-$("status").textContent="❌ Network error";
-} finally { pinSubmitting=false; }
+  if(pinSubmitting) return; pinSubmitting=true;
+  $("status").textContent="Checking…";
+  try{
+    const d=await fetch(FLOW_VALIDATE,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"validatePin",pin:pin})}).then(r=>r.json());
+    if(d.status==="success"){
+      loggedInUser = d.user?.Name || "";
+      $("status").textContent="✅";
+      $("welcome").textContent= loggedInUser ? "Welcome, "+loggedInUser : "";
+      if (loggedInUser) { $("userBadge").textContent = "User: " + loggedInUser; }
+      setTimeout(()=>{
+        showPage("page2");
+        $('beginBtn').classList.add('pulse');
+        ['step1','step2','step3'].forEach(id=>$(id)?.classList.remove('active')); $('step1')?.classList.add('active');
+        ['WristBand2.png','DoubleDeep2.png','ScanTrolly2.png'].forEach(src=>{ const i=new Image(); i.src=src; });
+        playDoubleBeep();
+      },600);
+    } else {
+      $("status").textContent="❌ Invalid";
+      $("pin").value="";
+    }
+  }catch{
+    $("status").textContent="❌ Network error";
+  } finally { pinSubmitting=false; }
 }
 
-bindKeypad('#keypad .key', (btn)=>{
-const act=btn.dataset.act;
-if(act==="clear"){ $("pin").value=""; return; }
-if(/^\d$/.test(btn.textContent)){
-if($("pin").value.length<4){
-$("pin").value += btn.textContent;
-if($("pin").value.length===4){ validatePin($("pin").value.trim()); }
-}
-}
+bindKeypad('#keypad .key', (btn,isHold)=>{
+  const act=btn.dataset.act;
+  if(act==="clear"){ $("pin").value=""; return; }
+  if(/^\d$/.test(btn.textContent)){
+    if($("pin").value.length<4){
+      $("pin").value += btn.textContent;
+      if($("pin").value.length===4){ validatePin($("pin").value.trim()); }
+    }
+  }
 });
 
 /* ---------- Page 2: Begin (instant) ---------- */
 $("beginBtn").addEventListener("click", ()=>{
-playBeep(900,140,0.25);
+  $('beginBtn').classList.remove('pulse'); earcon('begin');
 
-// Instant navigation to page 3
-showPage("page3");
-$("auditMsg").textContent = "Audit in progress — you can now begin scanning items for the audit.";
-$("auditVisual").style.display = "block";
-$("qrCodeAudit").innerHTML="";
+  // Instant navigation to page 3
+  showPage("page3");
+  $('step2')?.classList.add('active');
+  $("auditMsg").textContent = "Audit in progress — you can now begin scanning items for the audit.";
+  $("auditVisual").style.display = "block";
+  $("qrCodeAudit").innerHTML="";
 
-// Fetch items in the background
-callFlow("listItems")
-.then(items=>{ itemsData = Array.isArray(items)? items : []; dbg("Fetched items:", itemsData.length); })
-.catch(err=>{ dbg("Error fetching items:", err); });
+  // Fetch items in the background
+  callFlow("listItems")
+    .then(items=>{ itemsData = Array.isArray(items)? items : []; dbg("Fetched items:", itemsData.length); })
+    .catch(err=>{ dbg("Error fetching items:", err); });
 
-// Keep existing 30s transition to upload page
-setTimeout(()=>{ showUploadPage(); },30000);
+  // Keep the existing 30s transition to upload page
+  setTimeout(()=>{ showUploadPage(); },30000);
 });
 
-/* ---------- Page 3: DONE (still supported if scanner sends DONE) ---------- */
+/* ---------- Page 3: DONE shortcut if scanner sends DONE ---------- */
 $("hiddenScanner3").addEventListener("keydown", e=>{
-if(e.key==="Enter" && e.target.value.trim().toUpperCase()==="DONE"){
-e.target.value="";
-showUploadPage();
-}
+  if(e.key==="Enter" && e.target.value.trim().toUpperCase()==="DONE"){
+    e.target.value="";
+    showUploadPage();
+  }
 });
 
 /* ---------- Page 4: Upload ---------- */
 function showUploadPage(){
-showPage("page4");
-$("uploadQr").innerHTML="";
-new QRCode("uploadQr",{text:"^&032&^",width:240,height:240});
-$("visibleBulkInput").value="";
-capturedScans.clear();
-hasUploadInput=false;
-if(uploadTimer){clearTimeout(uploadTimer); uploadTimer=null;}
-renderScanCount();
+  $('step3')?.classList.add('active');
+  showPage("page4");
+  $("uploadQr").innerHTML="";
+  new QRCode("uploadQr",{text:"^&032&^",width:240,height:240});
+  $("visibleBulkInput").value="";
+  capturedScans.clear();
+  hasUploadInput=false;
+  if(uploadTimer){clearTimeout(uploadTimer); uploadTimer=null;}
+  renderScanCount();
 }
 
 function renderScanCount(){
-$("scanCount").textContent = capturedScans.size
-? `${capturedScans.size} scan${capturedScans.size===1?"":"s"} captured`
-: "No scans captured yet.";
+  const el=$('scanCount'); const target=capturedScans.size; let start=Number(el.dataset.val||0); const startTime=performance.now(); const dur=220;
+  const step=(now)=>{ const p=Math.min(1,(now-startTime)/dur); const cur=Math.round(start+(target-start)*p); el.textContent = cur? `${cur} scan${cur===1?"":"s"} captured` : 'No scans captured yet.'; el.dataset.val = cur; if(p<1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
 }
 
 /* capture scans offline & debounce upload */
 $("visibleBulkInput").addEventListener("input", e=>{
-if(e.data?.includes("\n") || e.inputType==="insertLineBreak"){
-addMany(e.target.value);
-e.target.value="";
-}
+  if(e.data?.includes("\n") || e.inputType==="insertLineBreak"){
+    addMany(e.target.value);
+    e.target.value="";
+  }
 });
 $("visibleBulkInput").addEventListener("keydown", e=>{
-if(e.key==="Enter"){
-e.preventDefault();
-addMany(e.target.value);
-e.target.value="";
-}
+  if(e.key==="Enter"){
+    e.preventDefault();
+    addMany(e.target.value);
+    e.target.value="";
+  }
 });
 
 function addMany(text){
-const before=capturedScans.size;
-(text.match(/\d{10}/g)||[]).forEach(c=>capturedScans.add(c));
-renderScanCount();
-if(capturedScans.size>before){
-hasUploadInput=true;
-scheduleAutoUpload();
-}
+  const before=capturedScans.size;
+  (text.match(/\d{10}/g)||[]).forEach(c=>capturedScans.add(c));
+  renderScanCount();
+  if(capturedScans.size>before){
+    hasUploadInput=true;
+    scheduleAutoUpload();
+  }
 }
 function scheduleAutoUpload(){
-if(!hasUploadInput) return;
-if(uploadTimer) clearTimeout(uploadTimer);
-uploadTimer=setTimeout(()=>{ doUpload(); },2000); // keep 2s no-input debounce
+  if(!hasUploadInput) return;
+  if(uploadTimer) clearTimeout(uploadTimer);
+  uploadTimer=setTimeout(()=>{ doUpload(); },2000); // 2s no-input debounce
 }
 
-/* --- 0–100% progress ring helpers (7s) --- */
-let _progressTimer=null, _progressStart=0, _progressCircumference=0;
+/* --- 0–100% conic progress ring (7s) --- */
+let _progressTimer=null, _progressStart=0;
 function startProgress(durationMs=7000){
-const circle = document.querySelector('.progress-ring__circle');
-const percentLabel = $("progressPercent");
-if(!circle || !percentLabel) return;
-const radius = circle.r.baseVal.value;
-_progressCircumference = 2 * Math.PI * radius;
-circle.style.strokeDasharray = `${_progressCircumference} ${_progressCircumference}`;
-circle.style.strokeDashoffset = `${_progressCircumference}`;
-_progressStart = performance.now();
-$("progressAnim").style.display = "flex";
-cancelAnimationFrame(_progressTimer);
-const tick = (now)=>{
-const elapsed = now - _progressStart;
-const p = Math.min(1, elapsed / durationMs);
-const offset = _progressCircumference * (1 - p);
-circle.style.strokeDashoffset = `${offset}`;
-percentLabel.textContent = `${Math.round(p*100)}%`;
-if(p < 1){ _progressTimer = requestAnimationFrame(tick); }
-};
-_progressTimer = requestAnimationFrame(tick);
+  const ring=$('conicRing'); const label=$('progressPercent'); if(!ring||!label) return;
+  $('progressAnim').style.display='flex';
+  _progressStart=performance.now(); cancelAnimationFrame(_progressTimer);
+  const tick=(now)=>{
+    const p=Math.min(1,(now-_progressStart)/durationMs);
+    ring.style.setProperty('--p', (p*360)+'deg');
+    label.textContent = Math.round(p*100)+'%';
+    if(p<1){ _progressTimer=requestAnimationFrame(tick); }
+  };
+  _progressTimer=requestAnimationFrame(tick);
 }
 function stopProgress(){
-cancelAnimationFrame(_progressTimer);
-const circle = document.querySelector('.progress-ring__circle');
-const percentLabel = $("progressPercent");
-if(circle){ circle.style.strokeDashoffset = 0; }
-if(percentLabel){ percentLabel.textContent = '100%'; }
+  cancelAnimationFrame(_progressTimer);
+  const ring=$('conicRing'); const label=$('progressPercent');
+  if(ring){ ring.style.setProperty('--p','360deg'); }
+  if(label){ label.textContent='100%'; }
 }
 
 /* auto-upload */
 async function doUpload(){
-if (isUploading || !capturedScans.size) return;
-isUploading=true;
+  if (isUploading || !capturedScans.size) return;
+  isUploading=true;
 
-// start 7s visual progress (purely visual; server timing can vary)
-startProgress(7000);
-$("progressText").textContent = "Uploading…";
-$("progressAnim").style.display = "flex";
+  earcon('uploadStart'); // sound cue
+  startProgress(7000);
+  $("progressText").textContent = "Uploading…";
+  $("progressAnim").style.display = "flex";
 
-const checksPayload = [...capturedScans].map(scanId => {
-const match = itemsData.find(item => String(item.ItemID) === scanId) || {};
-return {
-ScanID: "SCAN-" + scanId,
-ItemID: scanId,
-ItemName: match.ItemName || "Unknown",
-Room: match.Room || "Unknown",
-CheckType: "Audit",
-CheckValue: "Checked"
-};
-});
+  const checksPayload = [...capturedScans].map(scanId => {
+    const match = itemsData.find(item => String(item.ItemID) === scanId) || {};
+    return {
+      ScanID: "SCAN-" + scanId,
+      ItemID: scanId,
+      ItemName: match.ItemName || "Unknown",
+      Room: match.Room || "Unknown",
+      CheckType: "Audit",
+      CheckValue: "Checked"
+    };
+  });
 
-const payload = {
-SessionID: "SESSION-" + Date.now(),
-StaffName: "PIN User",
-SubmittedAt: new Date().toISOString(),
-Comment: "Scans submitted via portal",
-Checks: checksPayload
-};
+  const payload = {
+    SessionID: "SESSION-" + Date.now(),
+    StaffName: "PIN User",
+    SubmittedAt: new Date().toISOString(),
+    Comment: "Scans submitted via portal",
+    Checks: checksPayload
+  };
 
-try {
-const res = await callFlow("submitScan", payload);
-if (res?.status === "success") {
-renderResultTable();
-showPage("page5");
-} else {
-dbg("Upload error:", res);
-alert("Error submitting scans.");
-}
-} catch (err) {
-dbg("Upload exception:", err);
-alert("Upload failed.");
-} finally {
-stopProgress();
-$("progressAnim").style.display = "none";
-isUploading=false;
-}
+  try {
+    const res = await callFlow("submitScan", payload);
+    if (res?.status === "success") {
+      earcon('uploadDone');
+      const tickSvg = $('doneTick'); if(tickSvg){ tickSvg.style.display='block'; tickSvg.classList.add('drawn'); }
+      renderResultTable();
+      showPage("page5");
+    } else {
+      dbg("Upload error:", res);
+      alert("Error submitting scans.");
+    }
+  } catch (err) {
+    dbg("Upload exception:", err);
+    alert("Upload failed.");
+  } finally {
+    stopProgress();
+    $("progressAnim").style.display = "none";
+    isUploading=false;
+  }
 }
 
 function renderResultTable(){
-const rows = [...capturedScans].map(id=>{
-const item = itemsData.find(x=>String(x.ItemID)===id) || {};
-return `<tr><td>${id}</td><td>${item.Room||''}</td></tr>`;
-}).join("");
-const table = `
+  const rows = [...capturedScans].map(id=>{
+    const item = itemsData.find(x=>String(x.ItemID)===id) || {};
+    return `<tr><td>${id}</td><td>${item.Room||''}</td></tr>`;
+  }).join("");
+  const table = `
 <table style="width:100%;border-collapse:collapse">
 <thead>
 <tr><th style="border:1px solid #444;padding:8px;background:#eee;color:#000">Item ID</th>
@@ -459,110 +532,125 @@ const table = `
 ${rows}
 </tbody>
 </table>`;
-$("resultTable").innerHTML = table;
+  $("resultTable").innerHTML = table;
 }
 
 /* ---------- keep focus on inputs ---------- */
 setInterval(()=>{
-["hiddenScanner3","visibleBulkInput"].forEach(id=>{
-$(id)?.focus();
-});
+  ["hiddenScanner3","visibleBulkInput"].forEach(id=>{
+    $(id)?.focus();
+  });
 },500);
 
-/* + modal logic */
+/* subtle canvas sparkles */
+(function(){
+  const c=$('fx'); if(!c) return; const ctx=c.getContext('2d'); let w,h; let parts=[]; const N=40;
+  const rm=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function resize(){ w=c.width=window.innerWidth; h=c.height=window.innerHeight; }
+  function reset(p){ p.x=Math.random()*w; p.y=Math.random()*h; p.r=1+Math.random()*1.5; p.a=.05+Math.random()*0.08; p.vx=(Math.random()-.5)*0.2; p.vy=(Math.random()-.5)*0.2; }
+  function init(){ parts=new Array(N).fill(0).map(()=>{const p={}; reset(p); return p;}); }
+  function tick(){ if(rm) return; ctx.clearRect(0,0,w,h); parts.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; if(p.x<-10||p.x>w+10||p.y<-10||p.y>h+10) reset(p); ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fillStyle='rgba(58,213,58,'+p.a+')'; ctx.fill(); }); requestAnimationFrame(tick); }
+  window.addEventListener('resize', resize); resize(); init(); tick();
+})();
+
+/* + modal logic (unchanged except beep on click) */
 $("plusBtn").onclick = async () => {
-$("modalMsg").textContent = "";
-$("pin1").value = $("pin2").value = "";
-$("userSel").innerHTML = "<option>Loading…</option>";
-$("modal").style.display = "flex";
+  earcon('digit');
+  $("modalMsg").textContent = "";
+  $("pin1").value = $("pin2").value = "";
+  $("userSel").innerHTML = "<option>Loading…</option>";
+  $("modal").style.display = "flex";
 
-window._modalActive = "pin1";
-$("pin1").focus();
+  window._modalActive = "pin1";
+  $("pin1").focus();
 
-try {
-const r = await fetch(FLOW, {
-method: "POST",
-headers: { "Content-Type": "application/json" },
-body: JSON.stringify({ mode: "getUsersWithoutPins" })
-});
-const d = await r.json();
-$("userSel").innerHTML = d.status === "success"
-? d.users.map(u => `<option>${u.Name}</option>`).join("")
-: "<option>❌ Couldn't load users</option>";
-} catch (e) {
-$("modalMsg").textContent = "Network error";
-}
+  try {
+    const r = await fetch(FLOW, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "getUsersWithoutPins" })
+    });
+    const d = await r.json();
+    $("userSel").innerHTML = d.status === "success"
+      ? d.users.map(u => `<option>${u.Name}</option>`).join("")
+      : "<option>❌ Couldn't load users</option>";
+  } catch (e) {
+    $("modalMsg").textContent = "Network error";
+  }
 };
 
-$("cancel").onclick = () => $("modal").style.display = "none";
+$("cancel").onclick = () => { earcon('clear'); $("modal").style.display = "none"; };
 
 /* Modal keypad-only entry */
 ["pin1","pin2"].forEach(id=>{
-$(id).addEventListener("keydown", e=> e.preventDefault());
-$(id).addEventListener("input", e=> e.preventDefault());
-$(id).addEventListener("click", ()=> window._modalActive = id);
+  $(id).addEventListener("keydown", e=> e.preventDefault());
+  $(id).addEventListener("input", e=> e.preventDefault());
+  $(id).addEventListener("click", ()=> window._modalActive = id);
 });
 bindKeypad('#modalKeypad .key', (btn)=>{
-const targetId = window._modalActive || 'pin1';
-const el = $(targetId);
-const act = btn.dataset.act;
-if (!el) return;
-if (act === 'clear') { el.value = ''; return; }
-if (act === 'del') { el.value = el.value.slice(0,-1); return; }
-if (el.value.length < 4 && /^\d$/.test(btn.textContent)) {
-el.value += btn.textContent;
-}
+  const targetId = window._modalActive || 'pin1';
+  const el = $(targetId);
+  const act = btn.dataset.act;
+  if (!el) return;
+  if (act === 'clear') { el.value = ''; earcon('clear'); return; }
+  if (act === 'del') { el.value = el.value.slice(0,-1); return; }
+  if (el.value.length < 4 && /^\d$/.test(btn.textContent)) {
+    el.value += btn.textContent;
+  }
 });
 
 /* Save with pre-check */
 $("save").onclick = async () => {
-playBeep();
-const name = $("userSel").value;
-const p1 = $("pin1").value.trim(), p2 = $("pin2").value.trim();
-if (p1 !== p2 || p1.length !== 4 || isNaN(p1)) {
-$("modalMsg").textContent = "Pins must match & be 4 digits";
-return;
-}
-$("modalMsg").textContent = "Checking…";
-try {
-const chk = await fetch(FLOW, {
-method: "POST",
-headers: { "Content-Type": "application/json" },
-body: JSON.stringify({ mode: "validatePin", pin: p1 })
-});
-const chkData = await chk.json();
-if (chkData && chkData.status === "success") {
-$("modalMsg").textContent = "❌ That PIN is already taken.";
-return;
-}
-$("modalMsg").textContent = "Saving…";
-const r = await fetch(FLOW, {
-method: "POST",
-headers: { "Content-Type": "application/json" },
-body: JSON.stringify({ mode: "addPin", name, pin: p1 })
-});
-const d = await r.json();
-const taken =
-(d && d.error === "PinAlreadyExists") ||
-(d && d.message && /already\\s*(taken|exists)/i.test(String(d.message)));
-if (d && d.status === "success") {
-$("modalMsg").textContent = "✅ Saved";
-setTimeout(() => { $("modal").style.display = "none"; }, 1000);
-} else if (taken || r.status === 409) {
-$("modalMsg").textContent = "❌ That PIN is already taken.";
-} else {
-$("modalMsg").textContent = "❌ Error";
-}
-} catch (e) {
-$("modalMsg").textContent = "Network error";
-}
+  earcon('digit');
+  const name = $("userSel").value;
+  const p1 = $("pin1").value.trim(), p2 = $("pin2").value.trim();
+  if (p1 !== p2 || p1.length !== 4 || isNaN(p1)) {
+    $("modalMsg").textContent = "Pins must match & be 4 digits";
+    return;
+  }
+  $("modalMsg").textContent = "Checking…";
+  try {
+    const chk = await fetch(FLOW, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "validatePin", pin: p1 })
+    });
+    const chkData = await chk.json();
+    if (chkData && chkData.status === "success") {
+      $("modalMsg").textContent = "❌ That PIN is already taken.";
+      return;
+    }
+    $("modalMsg").textContent = "Saving…";
+    const r = await fetch(FLOW, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "addPin", name, pin: p1 })
+    });
+    const d = await r.json();
+    const taken =
+      (d && d.error === "PinAlreadyExists") ||
+      (d && d.message && /already\s*(taken|exists)/i.test(String(d.message)));
+    if (d && d.status === "success") {
+      $("modalMsg").textContent = "✅ Saved";
+      setTimeout(() => { $("modal").style.display = "none"; }, 1000);
+    } else if (taken || r.status === 409) {
+      $("modalMsg").textContent = "❌ That PIN is already taken.";
+    } else {
+      $("modalMsg").textContent = "❌ Error";
+    }
+  } catch (e) {
+    $("modalMsg").textContent = "Network error";
+  }
 };
 
-/* generic button sounds */
-["plusBtn","save","cancel"].forEach(id=>{
-const el=$(id);
-if(el){ el.addEventListener('pointerdown', ()=>playBeep()); }
-});
+/* network online/offline banner */
+function setNet(b){ const nb=$('netBanner'); if(!nb) return; nb.style.display=b? 'none':'inline-flex'; }
+window.addEventListener('online', ()=>setNet(true));
+window.addEventListener('offline', ()=>setNet(false));
+setNet(navigator.onLine);
+
+/* keep focus gently on scan inputs */
+document.addEventListener('pointerdown', ()=>{ try{ ensureCtx(); }catch{} }); // prime audio context on first tap
 </script>
 
 </body>
