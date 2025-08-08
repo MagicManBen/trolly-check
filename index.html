@@ -58,7 +58,7 @@ button{cursor:pointer;background:#1e8c1e;color:#fff}
 
 /* + button & modal styles */
 button.danger{background:#b30000}
-#plusBtn{position:fixed;bottom:20px;right:20px;width:48px;height:48px;border-radius:50%;font-size:28px;padding:6px 0}
+#plusBtn{position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);right:calc(env(safe-area-inset-right,0px) + 16px);width:48px;height:48px;border-radius:50%;font-size:28px;padding:6px 0;z-index:10000}
 #modal{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;justify-content:center;align-items:center}
 #box{background:#222;padding:20px;border-radius:8px;width:90%;max-width:380px}
 #box select,#box input{width:100%;margin:6px 0}
@@ -76,6 +76,13 @@ button.danger{background:#b30000}
 /* instructional images (responsive for vertical iPad) */
 .instruction-img{display:block;margin:16px auto 0;max-width:80vw;height:auto}
 
+/* page-specific image sizing for portrait iPad */
+#page1 .instruction-img{max-width:60vw;max-height:30vh;margin-top:12px}
+#page2 .instruction-img{max-width:70vw;max-height:32vh}
+#page3 .instruction-img{max-width:70vw;max-height:35vh;margin-top:16px}
+
+/* make page 2 stack start at top (not vertically centered) */
+#qrCodeWrapper{justify-content:flex-start;min-height:60vh;padding-top:10px;gap:18px}
 /* bigger, white Begin button */
 #beginBtn{background:#fff!important;color:#000!important;border:2px solid #000;border-radius:8px;padding:14px 22px;font-size:1.15rem}
 </style>
@@ -114,6 +121,7 @@ button.danger{background:#b30000}
 <div id="auditMsgWrapper">
 <h2 id="auditMsg">Audit in progress</h2>
 <div id="auditVisual" class="spinner" style="border-top-color:#0000"></div>
+<img class="instruction-img" src="ScanTrolly.png" alt="Scan the trolley barcode" />
 <div id="qrCodeAudit" style="margin-top:20px;"></div>
 </div>
 <input id="hiddenScanner3" class="scanner" type="text" autocomplete="off">
