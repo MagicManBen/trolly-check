@@ -90,12 +90,9 @@ button.danger{background:#b30000}
 .img-row{display:flex;gap:16px;align-items:flex-start;justify-content:center;flex-wrap:wrap;margin-top:8px}
 .img-row img{flex:1 1 320px;max-width:46%;height:auto}
 
-/* bigger Begin button */
-#beginBtn{font-size:1.25rem;padding:16px 28px;border-radius:12px;background:#1e8c1e;color:#fff;border:none;box-shadow:0 0 0 2px #1e8c1e33 inset;transition:transform .05s ease, box-shadow .2s ease}
+</style>
+#beginBtn{font-size:1.25rem;padding:16px 28px;border-radius:12px;background:#fff;color:#000;border:none;box-shadow:0 0 0 2px #1e8c1e33 inset;transition:transform .05s ease, box-shadow .2s ease}
 #beginBtn:active{transform:scale(.98)}
-
-/* optional background keying (approximate) */
-.keyout{background:#141314;mix-blend-mode:lighten;filter:contrast(110%) brightness(110%)}
 </style>
 </style>
 </head>
@@ -121,8 +118,8 @@ button.danger{background:#b30000}
   <div id="qrCodeWrapper">
     <div id="qrTitle">Press the button on scanner once</div>
     <div class="img-row">
-      <img id="wristImage" class="keyout" src="WristBand.png" alt="Wrist band instructions" />
-      <img id="qrImage" class="keyout" src="DoubleDeep.png" alt="Press the button on scanner once" />
+      <img id="wristImage" src="WristBand.png" alt="Wrist band instructions" />
+      <img id="qrImage" src="DoubleDeep.png" alt="Press the button on scanner once" />
     </div>
     <div id="clickText">After 2 beeps, click here to begin</div>
     <button id="beginBtn" type="button" style="margin-top:8px">Begin</button>
