@@ -56,8 +56,6 @@ button{cursor:pointer;background:#1e8c1e;color:#fff}
 .progress-ring__label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:bold}
 #progressText{margin-top:14px;font-size:1.4rem;color:#fff;font-weight:bold}
 
-/* results table */
-#resultTable{width:90%;max-width:600px;color:#000;background:#fff;border-radius:6px;overflow:auto;font-family:Arial,sans-serif;font-size:.9rem;padding:10px}
 /* review table (Page 5) */
 .review-wrap{width:96%;max-width:980px;margin:0 auto}
 .review-note{color:#bbb;margin:6px 0 14px;font-size:.95rem}
@@ -69,12 +67,19 @@ button{cursor:pointer;background:#1e8c1e;color:#fff}
 .table td.room-col{width:14%}
 .chk-cell{display:flex;align-items:center;justify-content:center;gap:6px}
 .chk-cell input[type="checkbox"]{transform:scale(1.2)}
-.temp-val{width:40px;padding:4px 6px;border:1px solid #bbb;border-radius:6px;font-size:.9rem;text-align:center}
 .actions{display:flex;gap:10px;justify-content:center;margin-top:16px}
 #submitChecksBtn{background:#1e8c1e;color:#fff;border-radius:8px;padding:12px 18px;font-size:1.05rem}
 #submitChecksBtn[disabled]{opacity:.6;cursor:not-allowed}
 .success-msg{color:#1e8c1e;font-weight:bold;margin-top:10px}
 .error-msg{color:#ff6961;font-weight:bold;margin-top:10px}
+
+/* temperature panel below table */
+#tempSection{display:none;margin:12px 0 6px;padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:8px;width:96%;max-width:980px}
+#tempSection h3{margin:0 0 8px;font-size:1.05rem;color:#ddd}
+.temp-row{display:grid;grid-template-columns:1.2fr .8fr auto;gap:10px;align-items:center;margin:6px 0}
+.temp-row .label{color:#ddd;text-align:left}
+.temp-input{width:56px;padding:6px 8px;border:1px solid #bbb;border-radius:6px;font-size:1rem;text-align:center}
+.temp-hint{color:#aaa;font-size:.85rem;text-align:left}
 
 /* + button & modal styles */
 button.danger{background:#b30000}
@@ -105,6 +110,24 @@ button.danger{background:#b30000}
 #qrCodeWrapper{justify-content:flex-start;min-height:60vh;padding-top:10px;gap:18px}
 /* bigger, white Begin button */
 #beginBtn{background:#fff!important;color:#000!important;border:2px solid #000;border-radius:8px;padding:14px 22px;font-size:1.15rem}
+
+/* done animation */
+.done-wrap{position:relative;width:160px;height:160px;border-radius:50%;background:#0e0e0e;border:3px solid #1e8c1e;display:flex;align-items:center;justify-content:center;animation:pulse 1.8s ease-in-out 2}
+.tick{width:60px;height:30px;border-left:6px solid #1e8c1e;border-bottom:6px solid #1e8c1e;transform:rotate(-45deg) translateY(-6px);opacity:0;animation:draw .6s .3s ease forwards}
+.burst{position:absolute;width:8px;height:8px;background:#1e8c1e;border-radius:50%;opacity:0}
+.b1{animation:burst 1.2s .4s ease-out forwards}
+.b2{animation:burst 1.2s .6s ease-out forwards}
+.b3{animation:burst 1.2s .8s ease-out forwards}
+@keyframes draw{to{opacity:1;transform:rotate(-45deg) translateY(-6px) scale(1.05)}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(30,140,30,.5)}50%{box-shadow:0 0 30px 6px rgba(30,140,30,.45)}}
+@keyframes burst{
+  0%{opacity:0;transform:translate(0,0) scale(0.8)}
+  50%{opacity:1}
+  100%{opacity:0;transform:translate(var(--x,0),var(--y,0)) scale(1)}
+}
+.b1{--x:-60px;--y:-20px}
+.b2{--x:50px;--y:-10px}
+.b3{--x:0px;--y:60px}
 </style>
 </head>
 <body>
@@ -172,12 +195,33 @@ button.danger{background:#b30000}
 <div id="page5" class="page">
   <div id="outputPage" class="review-wrap">
     <h2>Review checks before submitting</h2>
-    <div class="review-note">Tick the checks performed. For checks that need a value (e.g. temperature), enter the value next to the tick box. Add comments if needed.</div>
+    <div class="review-note">Tick the checks performed. If you tick Temperature, enter the value below.</div>
     <div id="reviewTable"></div>
+
+    <!-- temperatures panel -->
+    <div id="tempSection">
+      <h3>Temperatures</h3>
+      <div id="tempRows"></div>
+      <div class="temp-hint">Enter a 1–2 digit value for each item you ticked as "Temperature".</div>
+    </div>
+
     <div class="actions">
       <button id="submitChecksBtn" type="button" disabled>Submit</button>
     </div>
     <div id="submitMsg" aria-live="polite"></div>
+  </div>
+</div>
+
+<!-- Page 6 – Done -->
+<div id="page6" class="page">
+  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh">
+    <div class="done-wrap">
+      <div class="tick"></div>
+      <div class="burst b1"></div>
+      <div class="burst b2"></div>
+      <div class="burst b3"></div>
+    </div>
+    <h2 style="margin-top:18px">All set!</h2>
   </div>
 </div>
 
@@ -215,24 +259,20 @@ const FLOW = FLOW_VALIDATE;
 
 const $=id=>document.getElementById(id);
 
-// --- audio helpers ---
+// --- audio helpers (keypad-only beeps) ---
 let audioCtx=null;
 function playBeep(freq=600, duration=120, volume=0.2){
-try{
-if(!audioCtx){ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }
-const osc = audioCtx.createOscillator();
-const gain = audioCtx.createGain();
-osc.type = 'sine';
-osc.frequency.value = freq;
-gain.gain.value = volume;
-osc.connect(gain); gain.connect(audioCtx.destination);
-osc.start();
-setTimeout(()=>{ try{osc.stop();}catch{} }, duration);
-}catch{}
-}
-function playDoubleBeep(){
-playBeep(800,120,0.25);
-setTimeout(()=>playBeep(1000,120,0.25), 220);
+  try{
+    if(!audioCtx){ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.value = volume;
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start();
+    setTimeout(()=>{ try{osc.stop();}catch{} }, duration);
+  }catch{}
 }
 
 /* ---------- state ---------- */
@@ -243,129 +283,125 @@ let uploadTimer=null;
 let hasUploadInput=false;
 let isUploading=false;
 let resolvedItems=[]; // items returned by resolveScans
-let pendingRows=0;   // number of ticked checks ready to submit
 
 /* ---------- debug ---------- */
 function dbg(...m){const log=$("debugLog");log.textContent+=m.join(" ")+"\n";log.parentElement.scrollTop=log.parentElement.scrollHeight;}
 
 /* ---------- helpers ---------- */
 function callFlow(mode,payload={}) {
-return fetch(`${FLOW_BASE}&mode=${mode}`,{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({mode,...payload})
-}).then(r=>r.json());
+  return fetch(`${FLOW_BASE}&mode=${mode}`,{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({mode,...payload})
+  }).then(r=>r.json());
 }
 function showPage(id){
-document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
-$(id).classList.add("active");
-// Show logged-in user badge on pages 2+ only
-if (id !== "page1" && loggedInUser) {
-$("userBadge").textContent = "User: " + loggedInUser;
-$("userBadge").style.display = "block";
-} else {
-$("userBadge").style.display = "none";
-}
+  document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+  $(id).classList.add("active");
+  // Show logged-in user badge on pages 2+ only
+  if (id !== "page1" && loggedInUser) {
+    $("userBadge").textContent = "User: " + loggedInUser;
+    $("userBadge").style.display = "block";
+  } else {
+    $("userBadge").style.display = "none";
+  }
 }
 
 // ----- Keypad binder -----
 function bindKeypad(selector, onpress){
-const downEvt = window.PointerEvent ? 'pointerdown' : 'mousedown';
-const upEvt = window.PointerEvent ? 'pointerup' : 'mouseup';
-const leaveEvt = window.PointerEvent ? 'pointerleave' : 'mouseleave';
-document.querySelectorAll(selector).forEach(btn=>{
-const downHandler=(e)=>{ e.preventDefault(); btn.classList.add('pressed'); playBeep(); onpress(btn); };
-const upHandler=()=>{ btn.classList.remove('pressed'); };
-const leaveHandler=()=>{ btn.classList.remove('pressed'); };
-btn.addEventListener(downEvt, downHandler, { passive:false });
-btn.addEventListener(upEvt, upHandler);
-btn.addEventListener(leaveEvt, leaveHandler);
-});
+  const downEvt = window.PointerEvent ? 'pointerdown' : 'mousedown';
+  const upEvt = window.PointerEvent ? 'pointerup' : 'mouseup';
+  const leaveEvt = window.PointerEvent ? 'pointerleave' : 'mouseleave';
+  document.querySelectorAll(selector).forEach(btn=>{
+    const downHandler=(e)=>{ e.preventDefault(); btn.classList.add('pressed'); playBeep(); onpress(btn); };
+    const upHandler=()=>{ btn.classList.remove('pressed'); };
+    const leaveHandler=()=>{ btn.classList.remove('pressed'); };
+    btn.addEventListener(downEvt, downHandler, { passive:false });
+    btn.addEventListener(upEvt, upHandler);
+    btn.addEventListener(leaveEvt, leaveHandler);
+  });
 }
 
 let pinSubmitting=false;
 async function validatePin(pin){
-if(pinSubmitting) return; pinSubmitting=true;
-$("status").textContent="Checking…";
-try{
-const d=await fetch(FLOW_VALIDATE,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"validatePin",pin:pin})}).then(r=>r.json());
-if(d.status==="success"){
-  loggedInUser = d.user?.Name || "";
-  $("status").textContent = "✅";
-  $("welcome").textContent = loggedInUser ? "Welcome, "+loggedInUser : "";
-  if (loggedInUser) { $("userBadge").textContent = "User: " + loggedInUser; }
-  // show a clear success signal for 2 seconds
-  $("loginSuccess").style.display = "block";
-  setTimeout(()=>{
-    showPage("page2");
-    $("loginSuccess").style.display = "none";
-    playDoubleBeep(); // two beeps before begin
-    $("qrCode").innerHTML = "";
-  }, 2000);
-} else {
-$("status").textContent="❌ Invalid";
-$("pin").value="";
-}
-}catch{
-$("status").textContent="❌ Network error";
-} finally { pinSubmitting=false; }
+  if(pinSubmitting) return; pinSubmitting=true;
+  $("status").textContent="Checking…";
+  try{
+    const d=await fetch(FLOW_VALIDATE,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"validatePin",pin:pin})}).then(r=>r.json());
+    if(d.status==="success"){
+      loggedInUser = d.user?.Name || "";
+      $("status").textContent = "✅";
+      $("welcome").textContent = loggedInUser ? "Welcome, "+loggedInUser : "";
+      if (loggedInUser) { $("userBadge").textContent = "User: " + loggedInUser; }
+      // show a clear success signal for 2 seconds
+      $("loginSuccess").style.display = "block";
+      setTimeout(()=>{
+        showPage("page2");
+        $("loginSuccess").style.display = "none";
+        $("qrCode").innerHTML = "";
+      }, 2000);
+    } else {
+      $("status").textContent="❌ Invalid";
+      $("pin").value="";
+    }
+  }catch{
+    $("status").textContent="❌ Network error";
+  } finally { pinSubmitting=false; }
 }
 
 bindKeypad('#keypad .key', (btn)=>{
-const act=btn.dataset.act;
-if(act==="clear"){ $("pin").value=""; return; }
-if(/^\d$/.test(btn.textContent)){
-if($("pin").value.length<4){
-$("pin").value += btn.textContent;
-if($("pin").value.length===4){ validatePin($("pin").value.trim()); }
-}
-}
+  const act=btn.dataset.act;
+  if(act==="clear"){ $("pin").value=""; return; }
+  if(/^\d$/.test(btn.textContent)){
+    if($("pin").value.length<4){
+      $("pin").value += btn.textContent;
+      if($("pin").value.length===4){ validatePin($("pin").value.trim()); }
+    }
+  }
 });
 
-/* ---------- Page 2: Begin (instant) ---------- */
+/* ---------- Page 2: Begin ---------- */
 $("beginBtn").addEventListener("click", ()=>{
-playBeep(900,140,0.25);
+  // Instant navigation to page 3
+  showPage("page3");
+  $("auditMsg").textContent = "Audit in progress — you can now begin scanning items for the audit.";
+  $("auditVisual").style.display = "block";
+  $("qrCodeAudit").innerHTML="";
 
-// Instant navigation to page 3
-showPage("page3");
-$("auditMsg").textContent = "Audit in progress — you can now begin scanning items for the audit.";
-$("auditVisual").style.display = "block";
-$("qrCodeAudit").innerHTML="";
+  // Fetch items in the background
+  callFlow("listItems")
+    .then(items=>{ itemsData = Array.isArray(items)? items : []; dbg("Fetched items:", itemsData.length); })
+    .catch(err=>{ dbg("Error fetching items:", err); });
 
-// Fetch items in the background
-callFlow("listItems")
-.then(items=>{ itemsData = Array.isArray(items)? items : []; dbg("Fetched items:", itemsData.length); })
-.catch(err=>{ dbg("Error fetching items:", err); });
-
-// Keep existing 30s transition to upload page
-setTimeout(()=>{ showUploadPage(); },30000);
+  // Short transition to upload page (5s)
+  setTimeout(()=>{ showUploadPage(); }, 5000);
 });
 
 /* ---------- Page 3: DONE (still supported if scanner sends DONE) ---------- */
 $("hiddenScanner3").addEventListener("keydown", e=>{
-if(e.key==="Enter" && e.target.value.trim().toUpperCase()==="DONE"){
-e.target.value="";
-showUploadPage();
-}
+  if(e.key==="Enter" && e.target.value.trim().toUpperCase()==="DONE"){
+    e.target.value="";
+    showUploadPage();
+  }
 });
 
 /* ---------- Page 4: Upload ---------- */
 function showUploadPage(){
-showPage("page4");
-$("uploadQr").innerHTML="";
-new QRCode("uploadQr",{text:"^&032&^",width:240,height:240});
-$("visibleBulkInput").value="";
-$("visibleBulkInput").focus();
-capturedScans.clear();
-hasUploadInput=false;
-if(uploadTimer){clearTimeout(uploadTimer); uploadTimer=null;}
-renderScanCount();
+  showPage("page4");
+  $("uploadQr").innerHTML="";
+  new QRCode("uploadQr",{text:"^&032&^",width:240,height:240});
+  $("visibleBulkInput").value="";
+  $("visibleBulkInput").focus();
+  capturedScans.clear();
+  hasUploadInput=false;
+  if(uploadTimer){clearTimeout(uploadTimer); uploadTimer=null;}
+  renderScanCount();
 }
 
 function renderScanCount(){
-$("scanCount").textContent = capturedScans.size
-? `${capturedScans.size} scan${capturedScans.size===1?"":"s"} captured`
-: "No scans captured yet.";
+  $("scanCount").textContent = capturedScans.size
+    ? `${capturedScans.size} scan${capturedScans.size===1?"":"s"} captured`
+    : "No scans captured yet.";
 }
 
 // Accept scans whether they arrive line-by-line or as a single bulk paste
@@ -385,56 +421,55 @@ $("visibleBulkInput").addEventListener("keydown", e=>{
 });
 
 function addMany(text){
-const before=capturedScans.size;
-(text.match(/\d{10}/g)||[]).forEach(c=>capturedScans.add(c));
-renderScanCount();
-if(capturedScans.size>before){
-hasUploadInput=true;
-scheduleAutoUpload();
-}
+  const before=capturedScans.size;
+  (text.match(/\d{10}/g)||[]).forEach(c=>capturedScans.add(c));
+  renderScanCount();
+  if(capturedScans.size>before){
+    hasUploadInput=true;
+    scheduleAutoUpload();
+  }
 }
 function scheduleAutoUpload(){
-if(!hasUploadInput) return;
-if(uploadTimer) clearTimeout(uploadTimer);
-uploadTimer=setTimeout(()=>{ doUpload(); },2000); // keep 2s no-input debounce
+  if(!hasUploadInput) return;
+  if(uploadTimer) clearTimeout(uploadTimer);
+  uploadTimer=setTimeout(()=>{ doUpload(); },2000); // keep 2s no-input debounce
 }
 
-/* --- 0–100% progress ring helpers (7s) --- */
+/* --- 0–100% progress ring helpers (visual only) --- */
 let _progressTimer=null, _progressStart=0, _progressCircumference=0;
-function startProgress(durationMs=7000){
-const circle = document.querySelector('.progress-ring__circle');
-const percentLabel = $("progressPercent");
-if(!circle || !percentLabel) return;
-const radius = circle.r.baseVal.value;
-_progressCircumference = 2 * Math.PI * radius;
-circle.style.strokeDasharray = `${_progressCircumference} ${_progressCircumference}`;
-circle.style.strokeDashoffset = `${_progressCircumference}`;
-_progressStart = performance.now();
-$("progressAnim").style.display = "flex";
-cancelAnimationFrame(_progressTimer);
-const tick = (now)=>{
-const elapsed = now - _progressStart;
-const p = Math.min(1, elapsed / durationMs);
-const offset = _progressCircumference * (1 - p);
-circle.style.strokeDashoffset = `${offset}`;
-percentLabel.textContent = `${Math.round(p*100)}%`;
-if(p < 1){ _progressTimer = requestAnimationFrame(tick); }
-};
-_progressTimer = requestAnimationFrame(tick);
+function startProgress(durationMs=2000){
+  const circle = document.querySelector('.progress-ring__circle');
+  const percentLabel = $("progressPercent");
+  if(!circle || !percentLabel) return;
+  const radius = circle.r.baseVal.value;
+  _progressCircumference = 2 * Math.PI * radius;
+  circle.style.strokeDasharray = `${_progressCircumference} ${_progressCircumference}`;
+  circle.style.strokeDashoffset = `${_progressCircumference}`;
+  _progressStart = performance.now();
+  $("progressAnim").style.display = "flex";
+  cancelAnimationFrame(_progressTimer);
+  const tick = (now)=>{
+    const elapsed = now - _progressStart;
+    const p = Math.min(1, elapsed / durationMs);
+    const offset = _progressCircumference * (1 - p);
+    circle.style.strokeDashoffset = `${offset}`;
+    percentLabel.textContent = `${Math.round(p*100)}%`;
+    if(p < 1){ _progressTimer = requestAnimationFrame(tick); }
+  };
+  _progressTimer = requestAnimationFrame(tick);
 }
 function stopProgress(){
-cancelAnimationFrame(_progressTimer);
-const circle = document.querySelector('.progress-ring__circle');
-const percentLabel = $("progressPercent");
-if(circle){ circle.style.strokeDashoffset = 0; }
-if(percentLabel){ percentLabel.textContent = '100%'; }
+  cancelAnimationFrame(_progressTimer);
+  const circle = document.querySelector('.progress-ring__circle');
+  const percentLabel = $("progressPercent");
+  if(circle){ circle.style.strokeDashoffset = 0; }
+  if(percentLabel){ percentLabel.textContent = '100%'; }
 }
 
 /* auto-upload */
 async function doUpload(){
   if (isUploading || !capturedScans.size) return;
   isUploading=true;
-  // start progress (visual only)
   startProgress(2000);
   $("progressText").textContent = "Preparing items…";
   $("progressAnim").style.display = "flex";
@@ -463,7 +498,7 @@ async function doUpload(){
   showPage("page5");
 }
 
-
+/* ---------- Page 5: Review ---------- */
 function renderReviewTable(){
   const container = $("reviewTable");
   if(!container) return;
@@ -500,20 +535,10 @@ function renderReviewTable(){
       `<td class="room-col">${item.Room || ""}</td>`;
 
     columns.forEach(name=>{
-      // If an item doesn't have this check defined, render an empty cell
       if(!hasByName[name]){ html += `<td></td>`; return; }
-
-      const isTemp = name.toLowerCase() === "temperature";
-      if(isTemp){
-        html += `<td><div class="chk-cell">
-          <input type="checkbox" class="rev-chk" data-i="${i}" data-name="${name}">
-          <input type="text" class="temp-val" maxlength="2" inputmode="numeric" pattern="\\d{1,2}" placeholder=".." data-i="${i}" data-name="${name}">
-        </div></td>`;
-      }else{
-        html += `<td><div class="chk-cell">
-          <input type="checkbox" class="rev-chk" data-i="${i}" data-name="${name}">
-        </div></td>`;
-      }
+      html += `<td><div class="chk-cell">
+        <input type="checkbox" class="rev-chk" data-i="${i}" data-name="${name}">
+      </div></td>`;
     });
 
     html += `</tr>`;
@@ -522,29 +547,60 @@ function renderReviewTable(){
   html += '</tbody></table>';
   container.innerHTML = html;
 
+  // --- Temperature panel logic ---
+  function updateTempSection(){
+    const tempRows = [];
+    container.querySelectorAll('.rev-chk').forEach(chk=>{
+      if(chk.checked && String(chk.dataset.name||"").toLowerCase()==="temperature"){
+        const idx = Number(chk.dataset.i);
+        const it = resolvedItems[idx] || {};
+        tempRows.push({i: idx, item: it});
+      }
+    });
+    const wrap = $("tempSection");
+    const rowsHost = $("tempRows");
+    if(!wrap || !rowsHost) return;
+    if(!tempRows.length){ wrap.style.display = "none"; rowsHost.innerHTML = ""; return; }
+    wrap.style.display = "block";
+    rowsHost.innerHTML = tempRows.map(r => `
+      <div class="temp-row" data-i="${r.i}">
+        <div class="label">${r.item.ItemName || r.item.ItemID}</div>
+        <div class="label">${r.item.Room || ""}</div>
+        <input class="temp-input" type="text" maxlength="2" inputmode="numeric" pattern="\\d{1,2}" placeholder=".." data-i="${r.i}">
+      </div>
+    `).join("");
+    validateSubmit();
+  }
+
   function validateSubmit(){
     let count = 0, ok = true;
     container.querySelectorAll('.rev-chk').forEach(chk=>{
-      if(chk.checked){
-        count++;
-        if(chk.dataset.name.toLowerCase()==="temperature"){
-          const valEl = container.querySelector(`.temp-val[data-i="${chk.dataset.i}"][data-name="${chk.dataset.name}"]`);
-          const v = (valEl?.value || "").trim();
-          if(!/^\d{1,2}$/.test(v)) ok = false;
-        }
-      }
+      if(chk.checked){ count++; }
+    });
+    // Temperature values must be filled if any temp is ticked
+    const tempInputs = $("tempRows") ? $("tempRows").querySelectorAll('.temp-input') : [];
+    tempInputs.forEach(inp=>{
+      const v = (inp.value || "").trim();
+      if(!/^\d{1,2}$/.test(v)) ok = false;
     });
     $("submitChecksBtn").disabled = !(count>0 && ok);
   }
 
   container.querySelectorAll('.rev-chk').forEach(el=>{
-    el.addEventListener('change', validateSubmit);
+    el.addEventListener('change', ()=>{
+      if(String(el.dataset.name||"").toLowerCase()==="temperature"){ updateTempSection(); }
+      validateSubmit();
+    });
   });
-  container.querySelectorAll('.temp-val').forEach(el=>{
-    el.addEventListener('input', validateSubmit);
-  });
-
+  const tempHost = $("tempRows");
+  if(tempHost){
+    tempHost.addEventListener('input', (e)=>{
+      if(e.target && e.target.classList.contains('temp-input')) validateSubmit();
+    });
+  }
   // Initial state
+  $("tempSection").style.display = "none";
+  $("tempRows").innerHTML = "";
   $("submitChecksBtn").disabled = true;
 }
 
@@ -553,7 +609,7 @@ function buildSubmission(){
   const table = $("reviewTable");
   if(!table) return rows;
 
-  // For every checked box, create a row
+  // For every checked box, create a row (Temperature value comes from panel)
   table.querySelectorAll('.rev-chk:checked').forEach(chk=>{
     const i = Number(chk.dataset.i);
     const name = String(chk.dataset.name || "");
@@ -561,7 +617,7 @@ function buildSubmission(){
 
     let value = "Done";
     if(name.toLowerCase()==="temperature"){
-      const valEl = table.querySelector(`.temp-val[data-i="${i}"][data-name="${name}"]`);
+      const valEl = $("tempRows") ? $("tempRows").querySelector(`.temp-input[data-i="${i}"]`) : null;
       value = (valEl?.value || "").trim();
     }
 
@@ -571,7 +627,7 @@ function buildSubmission(){
       Room: item.Room || "",
       CheckType: name,
       CheckValue: value || "Done",
-      Comment: "" // comments removed for this layout
+      Comment: ""
     });
   });
 
@@ -592,7 +648,14 @@ $("submitChecksBtn").addEventListener("click", async ()=>{
     };
     const res = await callFlow('submitChecks', payload);
     if(res && res.status === 'success'){
-      $("submitMsg").innerHTML = `<div class="success-msg">Submitted ${rows.length} check${rows.length>1?'s':''}.</div>`;
+      // Done animation then return to page 1
+      showPage("page6");
+      setTimeout(()=>{
+        const ts = $("tempSection"); if(ts){ ts.style.display="none"; }
+        const tr = $("tempRows"); if(tr){ tr.innerHTML=""; }
+        $("submitMsg").innerHTML = "";
+        showPage("page1");
+      }, 2500);
     }else{
       $("submitMsg").innerHTML = `<div class="error-msg">Submission failed.</div>`;
       $("submitChecksBtn").disabled = false;
@@ -605,105 +668,98 @@ $("submitChecksBtn").addEventListener("click", async ()=>{
 
 /* ---------- keep focus on inputs ---------- */
 setInterval(()=>{
-["hiddenScanner3","visibleBulkInput"].forEach(id=>{
-$(id)?.focus();
-});
+  ["hiddenScanner3","visibleBulkInput"].forEach(id=>{
+    $(id)?.focus();
+  });
 },500);
 
 /* + modal logic */
 $("plusBtn").onclick = async () => {
-$("modalMsg").textContent = "";
-$("pin1").value = $("pin2").value = "";
-$("userSel").innerHTML = "<option>Loading…</option>";
-$("modal").style.display = "flex";
+  $("modalMsg").textContent = "";
+  $("pin1").value = $("pin2").value = "";
+  $("userSel").innerHTML = "<option>Loading…</option>";
+  $("modal").style.display = "flex";
 
-window._modalActive = "pin1";
-$("pin1").focus();
+  window._modalActive = "pin1";
+  $("pin1").focus();
 
-try {
-const r = await fetch(FLOW, {
-method: "POST",
-headers: { "Content-Type": "application/json" },
-body: JSON.stringify({ mode: "getUsersWithoutPins" })
-});
-const d = await r.json();
-$("userSel").innerHTML = d.status === "success"
-? d.users.map(u => `<option>${u.Name}</option>`).join("")
-: "<option>❌ Couldn't load users</option>";
-} catch (e) {
-$("modalMsg").textContent = "Network error";
-}
+  try {
+    const r = await fetch(FLOW, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "getUsersWithoutPins" })
+    });
+    const d = await r.json();
+    $("userSel").innerHTML = d.status === "success"
+      ? d.users.map(u => `<option>${u.Name}</option>`).join("")
+      : "<option>❌ Couldn't load users</option>";
+  } catch (e) {
+    $("modalMsg").textContent = "Network error";
+  }
 };
 
 $("cancel").onclick = () => $("modal").style.display = "none";
 
 /* Modal keypad-only entry */
 ["pin1","pin2"].forEach(id=>{
-$(id).addEventListener("keydown", e=> e.preventDefault());
-$(id).addEventListener("input", e=> e.preventDefault());
-$(id).addEventListener("click", ()=> window._modalActive = id);
+  $(id).addEventListener("keydown", e=> e.preventDefault());
+  $(id).addEventListener("input", e=> e.preventDefault());
+  $(id).addEventListener("click", ()=> window._modalActive = id);
 });
 bindKeypad('#modalKeypad .key', (btn)=>{
-const targetId = window._modalActive || 'pin1';
-const el = $(targetId);
-const act = btn.dataset.act;
-if (!el) return;
-if (act === 'clear') { el.value = ''; return; }
-if (act === 'del') { el.value = el.value.slice(0,-1); return; }
-if (el.value.length < 4 && /^\d$/.test(btn.textContent)) {
-el.value += btn.textContent;
-}
+  const targetId = window._modalActive || 'pin1';
+  const el = $(targetId);
+  const act = btn.dataset.act;
+  if (!el) return;
+  if (act === 'clear') { el.value = ''; return; }
+  if (act === 'del') { el.value = el.value.slice(0,-1); return; }
+  if (el.value.length < 4 && /^\d$/.test(btn.textContent)) {
+    el.value += btn.textContent;
+  }
 });
 
-/* Save with pre-check */
+/* Save with pre-check (no extra beeps) */
 $("save").onclick = async () => {
-playBeep();
-const name = $("userSel").value;
-const p1 = $("pin1").value.trim(), p2 = $("pin2").value.trim();
-if (p1 !== p2 || p1.length !== 4 || isNaN(p1)) {
-$("modalMsg").textContent = "Pins must match & be 4 digits";
-return;
-}
-$("modalMsg").textContent = "Checking…";
-try {
-const chk = await fetch(FLOW, {
-method: "POST",
-headers: { "Content-Type": "application/json" },
-body: JSON.stringify({ mode: "validatePin", pin: p1 })
-});
-const chkData = await chk.json();
-if (chkData && chkData.status === "success") {
-$("modalMsg").textContent = "❌ That PIN is already taken.";
-return;
-}
-$("modalMsg").textContent = "Saving…";
-const r = await fetch(FLOW, {
-method: "POST",
-headers: { "Content-Type": "application/json" },
-body: JSON.stringify({ mode: "addPin", name, pin: p1 })
-});
-const d = await r.json();
-const taken =
-(d && d.error === "PinAlreadyExists") ||
-(d && d.message && /already\\s*(taken|exists)/i.test(String(d.message)));
-if (d && d.status === "success") {
-$("modalMsg").textContent = "✅ Saved";
-setTimeout(() => { $("modal").style.display = "none"; }, 1000);
-} else if (taken || r.status === 409) {
-$("modalMsg").textContent = "❌ That PIN is already taken.";
-} else {
-$("modalMsg").textContent = "❌ Error";
-}
-} catch (e) {
-$("modalMsg").textContent = "Network error";
-}
+  const name = $("userSel").value;
+  const p1 = $("pin1").value.trim(), p2 = $("pin2").value.trim();
+  if (p1 !== p2 || p1.length !== 4 || isNaN(p1)) {
+    $("modalMsg").textContent = "Pins must match & be 4 digits";
+    return;
+  }
+  $("modalMsg").textContent = "Checking…";
+  try {
+    const chk = await fetch(FLOW, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "validatePin", pin: p1 })
+    });
+    const chkData = await chk.json();
+    if (chkData && chkData.status === "success") {
+      $("modalMsg").textContent = "❌ That PIN is already taken.";
+      return;
+    }
+    $("modalMsg").textContent = "Saving…";
+    const r = await fetch(FLOW, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "addPin", name, pin: p1 })
+    });
+    const d = await r.json();
+    const taken =
+      (d && d.error === "PinAlreadyExists") ||
+      (d && d.message && /already\s*(taken|exists)/i.test(String(d.message)));
+    if (d && d.status === "success") {
+      $("modalMsg").textContent = "✅ Saved";
+      setTimeout(() => { $("modal").style.display = "none"; }, 1000);
+    } else if (taken || r.status === 409) {
+      $("modalMsg").textContent = "❌ That PIN is already taken.";
+    } else {
+      $("modalMsg").textContent = "❌ Error";
+    }
+  } catch (e) {
+    $("modalMsg").textContent = "Network error";
+  }
 };
-
-/* generic button sounds */
-["plusBtn","save","cancel"].forEach(id=>{
-const el=$(id);
-if(el){ el.addEventListener('pointerdown', ()=>playBeep()); }
-});
 </script>
 
 </body>
