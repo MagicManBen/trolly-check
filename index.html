@@ -11,7 +11,7 @@ h1,h2{margin:0 0 20px}
 /* ---------- modern core look & feel ---------- */
 body{
   margin:0;
-  background: radial-gradient(1200px 800px at 50% -10%, #1b1b1b 0%, #141314 55%, #0f0f0f 100%);
+  background:#141314;
   color:#fff;
   font-family:Arial,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
   text-align:center;
@@ -30,7 +30,16 @@ button{
 button:hover{ box-shadow:0 10px 22px rgba(30,140,30,.35), inset 0 -2px 0 rgba(0,0,0,.25); }
 button:active{ transform:translateY(1px) scale(.99); }
 #status{margin-top:15px;font-weight:bold}
-#welcome{margin-top:10px;font-size:1.2rem;color:#1e8c1e}
+#welcome{
+  margin-top:12px;
+  font-size:1.35rem;
+  color:#d3ffd3;
+  background:rgba(30,140,30,.16);
+  border:1px solid rgba(30,140,30,.55);
+  display:inline-block;
+  padding:6px 14px;
+  border-radius:999px;
+}
 
 /* keypad */
 #keypad{margin:25px auto 10px;display:grid;grid-template-columns:repeat(3,80px);gap:10px;justify-content:center}
@@ -39,7 +48,7 @@ button:active{ transform:translateY(1px) scale(.99); }
 #keypad .zero{grid-column:2}
 
 /* pressed visual */
-.key.pressed{background:#1e8c1e;color:#fff;transform:scale(0.96)}
+.key.pressed{background:#555;color:#fff;transform:scale(0.96)}
 /* login success banner */
 .login-success{display:none;color:#1e8c1e;font-weight:bold;margin-top:8px;font-size:1.1rem}
 
@@ -157,8 +166,19 @@ button.danger{background:#b30000}
   padding:16px;
 }
 
-/* make page 2 stack start at top (not vertically centered) */
-#qrCodeWrapper{justify-content:flex-start;min-height:60vh;padding-top:10px;gap:18px}
+/* center the page 2 wrapper */
+#qrCodeWrapper{justify-content:center;min-height:70vh;padding-top:0;gap:18px}
+/* upload page layout */
+.upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:center;justify-items:center}
+@media (max-width:740px){ .upload-grid{grid-template-columns:1fr} }
+.scan-illustration{max-width:280px;width:80%;height:auto;filter:drop-shadow(0 6px 18px rgba(0,0,0,.35));border-radius:12px;opacity:.95}
+
+/* audit radar animation */
+.radar{position:relative;width:140px;height:140px;margin:10px auto}
+.radar span{position:absolute;inset:0;border:3px solid #1e8c1e;border-radius:50%;opacity:.95;animation:radar 1.8s linear infinite}
+.radar span:nth-child(2){animation-delay:.3s}
+.radar span:nth-child(3){animation-delay:.6s}
+@keyframes radar{0%{transform:scale(.2);opacity:.9}100%{transform:scale(1);opacity:0}}
 #beginBtn{background:#fff!important;color:#000!important;border:2px solid #000;border-radius:12px;padding:14px 22px;font-size:1.15rem}
 
 /* done animation */
@@ -211,10 +231,12 @@ button.danger{background:#b30000}
 <!-- Page 3 – Audit -->
 <div id="page3" class="page">
   <div id="auditMsgWrapper">
-    <h2 id="auditMsg">Audit in progress</h2>
-    <div id="auditVisual" class="spinner" style="border-top-color:#0000"></div>
-    <img class="instruction-img" src="ScanTrolly.png" alt="Scan the trolley barcode" />
-    <div id="qrCodeAudit" style="margin-top:20px;"></div>
+    <div class="card" style="width:min(92vw,560px);margin:0 auto">
+      <h2 id="auditMsg">Audit in progress</h2>
+      <div id="auditVisual" class="radar" aria-hidden="true"><span></span><span></span><span></span></div>
+      <img class="instruction-img" src="ScanTrolly.png" alt="Scan the trolley barcode" />
+      <div id="qrCodeAudit" style="margin-top:20px;"></div>
+    </div>
   </div>
   <input id="hiddenScanner3" class="scanner" type="text" autocomplete="off">
 </div>
@@ -222,19 +244,24 @@ button.danger{background:#b30000}
 <!-- Page 4 – Upload -->
 <div id="page4" class="page">
   <div id="doneScreen">
-    <h2>Scan here to upload:</h2>
-    <div id="uploadQr"></div>
-    <input id="visibleBulkInput" autocomplete="off">
-    <div id="scanCount">No scans captured yet.</div>
-    <div id="progressAnim">
-      <div class="progress-ring">
-        <svg width="120" height="120">
-          <circle class="progress-ring__bg" cx="60" cy="60" r="52"></circle>
-          <circle class="progress-ring__circle" cx="60" cy="60" r="52"></circle>
-        </svg>
-        <div class="progress-ring__label" id="progressPercent">0%</div>
+    <div class="card" style="width:min(92vw,560px);margin:0 auto">
+      <h2>Scan here to upload</h2>
+      <div class="upload-grid">
+        <img id="ipadScanImg" class="scan-illustration" src="IPADSCAN.png" alt="Scan the iPad screen">
+        <div id="uploadQr"></div>
       </div>
-      <div id="progressText">Uploading…</div>
+      <input id="visibleBulkInput" autocomplete="off">
+      <div id="scanCount">No scans captured yet.</div>
+      <div id="progressAnim">
+        <div class="progress-ring">
+          <svg width="120" height="120">
+            <circle class="progress-ring__bg" cx="60" cy="60" r="52"></circle>
+            <circle class="progress-ring__circle" cx="60" cy="60" r="52"></circle>
+          </svg>
+          <div class="progress-ring__label" id="progressPercent">0%</div>
+        </div>
+        <div id="progressText">Uploading…</div>
+      </div>
     </div>
   </div>
 </div>
@@ -243,7 +270,7 @@ button.danger{background:#b30000}
 <div id="page5" class="page">
   <div id="outputPage" class="review-wrap card">
     <h2>Review checks before submitting</h2>
-    <div class="review-note">Tick the checks performed. If you tick Temperature, enter the value below. You can add a single comment to apply to all rows.</div>
+    <div class="review-note">Select the checks performed for each item.</div>
     <div id="reviewTable"></div>
 
     <!-- temperatures panel -->
@@ -255,7 +282,7 @@ button.danger{background:#b30000}
 
     <!-- session comment -->
     <div id="commentSection" class="comment-wrap">
-      <textarea id="sessionComment" maxlength="280" placeholder="Optional comment for this submission (applies to all checked items)…"></textarea>
+      <textarea id="sessionComment" maxlength="280" placeholder="Optional comment for this submission…"></textarea>
     </div>
 
     <div class="actions">
