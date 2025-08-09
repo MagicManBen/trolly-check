@@ -61,11 +61,15 @@ button{cursor:pointer;background:#1e8c1e;color:#fff}
 /* review table (Page 5) */
 .review-wrap{width:96%;max-width:980px;margin:0 auto}
 .review-note{color:#bbb;margin:6px 0 14px;font-size:.95rem}
-.table{width:100%;border-collapse:collapse;background:#fff;color:#000;border-radius:8px;overflow:hidden}
-.table th,.table td{border:1px solid #ddd;padding:10px;vertical-align:top;text-align:left}
-.table th{background:#f3f3f3}
-.chkline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0}
-.chkline input[type="text"],.chkline input[type="number"],.chkline input[type="search"]{padding:6px 8px;border:1px solid #ccc;border-radius:6px;font-size:.9rem}
+.table{width:100%;border-collapse:collapse;background:#fff;color:#000;border-radius:8px;overflow:hidden;table-layout:fixed}
+.table th,.table td{border:1px solid #ddd;padding:8px;vertical-align:middle;text-align:center}
+.table th{background:#f3f3f3;font-weight:600;font-size:.95rem}
+.table td.item-col,.table td.room-col{text-align:left}
+.table td.item-col{width:30%}
+.table td.room-col{width:14%}
+.chk-cell{display:flex;align-items:center;justify-content:center;gap:6px}
+.chk-cell input[type="checkbox"]{transform:scale(1.2)}
+.temp-val{width:40px;padding:4px 6px;border:1px solid #bbb;border-radius:6px;font-size:.9rem;text-align:center}
 .actions{display:flex;gap:10px;justify-content:center;margin-top:16px}
 #submitChecksBtn{background:#1e8c1e;color:#fff;border-radius:8px;padding:12px 18px;font-size:1.05rem}
 #submitChecksBtn[disabled]{opacity:.6;cursor:not-allowed}
@@ -470,44 +474,78 @@ function renderReviewTable(){
     return;
   }
 
-  // Build table HTML
+  // Preferred column order; also include any extra check names found
+  const PREFERRED = ["Cleaned","Stocked","Battery","ExpiryDates","Temperature"];
+  const namesSet = new Set(PREFERRED);
+  resolvedItems.forEach(it => (it.Checks || []).forEach(c => {
+    const n = String(c.Name || "").trim();
+    if(n) namesSet.add(n);
+  }));
+  const columns = Array.from(namesSet);
+
+  // Build table header
   let html = '<table class="table"><thead><tr>'+
-    '<th style="width:28%">Item name</th>'+
-    '<th style="width:18%">Room</th>'+
-    '<th>Check type(s)</th>'+
+    '<th class="item-col">Item</th>'+
+    '<th class="room-col">Room</th>'+
+    columns.map(n => `<th>${n}</th>`).join("")+
     '</tr></thead><tbody>';
 
+  // Build each row
   resolvedItems.forEach((item, i)=>{
     const checks = Array.isArray(item.Checks) ? item.Checks : [];
-    const lines = checks.map((chk, j)=>{
-      const id = `chk_${i}_${j}`;
-      const needsVal = !!chk.RequiresValue;
-      return `<label class="chkline" for="${id}">`+
-        `<input type="checkbox" data-i="${i}" data-j="${j}" id="${id}" class="rev-chk">`+
-        `<span>${chk.Name}</span>`+
-        (needsVal ? `<input type="text" placeholder="Value" class="rev-val" data-i="${i}" data-j="${j}">` : '')+
-        `<input type="text" placeholder="Comment (optional)" class="rev-cmt" data-i="${i}" data-j="${j}">`+
-      `</label>`;
-    }).join("");
+    const hasByName = Object.fromEntries(checks.map(c => [String(c.Name || ""), c]));
 
     html += `<tr>`+
-      `<td>${item.ItemName || item.ItemID}</td>`+
-      `<td>${item.Room || ''}</td>`+
-      `<td>${lines || '<em>No checks mapped</em>'}</td>`+
-    `</tr>`;
+      `<td class="item-col">${item.ItemName || item.ItemID}</td>`+
+      `<td class="room-col">${item.Room || ""}</td>`;
+
+    columns.forEach(name=>{
+      // If an item doesn't have this check defined, render an empty cell
+      if(!hasByName[name]){ html += `<td></td>`; return; }
+
+      const isTemp = name.toLowerCase() === "temperature";
+      if(isTemp){
+        html += `<td><div class="chk-cell">
+          <input type="checkbox" class="rev-chk" data-i="${i}" data-name="${name}">
+          <input type="text" class="temp-val" maxlength="2" inputmode="numeric" pattern="\\d{1,2}" placeholder=".." data-i="${i}" data-name="${name}">
+        </div></td>`;
+      }else{
+        html += `<td><div class="chk-cell">
+          <input type="checkbox" class="rev-chk" data-i="${i}" data-name="${name}">
+        </div></td>`;
+      }
+    });
+
+    html += `</tr>`;
   });
 
   html += '</tbody></table>';
   container.innerHTML = html;
 
-  // Enable submit when at least one checkbox is ticked
-  pendingRows = 0;
-  container.querySelectorAll('.rev-chk').forEach(el=>{
-    el.addEventListener('change', ()=>{
-      pendingRows = [...container.querySelectorAll('.rev-chk')].filter(x=>x.checked).length;
-      $("submitChecksBtn").disabled = pendingRows===0;
+  function validateSubmit(){
+    let count = 0, ok = true;
+    container.querySelectorAll('.rev-chk').forEach(chk=>{
+      if(chk.checked){
+        count++;
+        if(chk.dataset.name.toLowerCase()==="temperature"){
+          const valEl = container.querySelector(`.temp-val[data-i="${chk.dataset.i}"][data-name="${chk.dataset.name}"]`);
+          const v = (valEl?.value || "").trim();
+          if(!/^\d{1,2}$/.test(v)) ok = false;
+        }
+      }
     });
+    $("submitChecksBtn").disabled = !(count>0 && ok);
+  }
+
+  container.querySelectorAll('.rev-chk').forEach(el=>{
+    el.addEventListener('change', validateSubmit);
   });
+  container.querySelectorAll('.temp-val').forEach(el=>{
+    el.addEventListener('input', validateSubmit);
+  });
+
+  // Initial state
+  $("submitChecksBtn").disabled = true;
 }
 
 function buildSubmission(){
@@ -515,24 +553,28 @@ function buildSubmission(){
   const table = $("reviewTable");
   if(!table) return rows;
 
-  table.querySelectorAll('.rev-chk').forEach(chk=>{
-    if(!chk.checked) return;
-    const i = Number(chk.dataset.i), j = Number(chk.dataset.j);
-    const item = resolvedItems[i];
-    const def = (item && Array.isArray(item.Checks) ? item.Checks[j] : null) || {};
-    const valEl = table.querySelector(`.rev-val[data-i="${i}"][data-j="${j}"]`);
-    const cmtEl = table.querySelector(`.rev-cmt[data-i="${i}"][data-j="${j}"]`);
-    const value = valEl ? valEl.value.trim() : "Done";
-    const comment = cmtEl ? cmtEl.value.trim() : "";
+  // For every checked box, create a row
+  table.querySelectorAll('.rev-chk:checked').forEach(chk=>{
+    const i = Number(chk.dataset.i);
+    const name = String(chk.dataset.name || "");
+    const item = resolvedItems[i] || {};
+
+    let value = "Done";
+    if(name.toLowerCase()==="temperature"){
+      const valEl = table.querySelector(`.temp-val[data-i="${i}"][data-name="${name}"]`);
+      value = (valEl?.value || "").trim();
+    }
+
     rows.push({
-      ItemID: String(item?.ItemID || ''),
-      ItemName: item?.ItemName || '',
-      Room: item?.Room || '',
-      CheckType: def.Name || '',
-      CheckValue: value || 'Done',
-      Comment: comment
+      ItemID: String(item.ItemID || ""),
+      ItemName: item.ItemName || "",
+      Room: item.Room || "",
+      CheckType: name,
+      CheckValue: value || "Done",
+      Comment: "" // comments removed for this layout
     });
   });
+
   return rows;
 }
 
