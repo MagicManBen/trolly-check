@@ -40,10 +40,15 @@ button:active{ transform:translateY(1px) scale(.99); }
   padding:6px 14px;
   border-radius:999px;
 }
+/* hide the welcome pill until there’s content to prevent the small green square */
+#welcome:empty{display:none}
 
 /* keypad */
 #keypad{margin:25px auto 10px;display:grid;grid-template-columns:repeat(3,80px);gap:10px;justify-content:center}
-#keypad .key{background:#333;color:#fff;border-radius:10px;font-size:1.3rem;padding:16px 0;user-select:none;transition:transform .05s ease, background .05s ease}
+#keypad .key{
+  background:#333;color:#fff;border-radius:10px;font-size:1.3rem;padding:16px 0;
+  user-select:none;transition:transform .05s ease, background .05s ease;box-shadow:none;
+}
 #keypad .wide{grid-column:span 3}
 #keypad .zero{grid-column:2}
 
@@ -129,7 +134,10 @@ button.danger{background:#b30000}
 
 /* modal keypad */
 #modalKeypad{margin:10px auto;display:grid;grid-template-columns:repeat(3,80px);gap:10px;justify-content:center}
-#modalKeypad .key{background:#333;color:#fff;border-radius:10px;font-size:1.3rem;padding:16px 0;user-select:none;transition:transform .05s ease, background .05s ease}
+#modalKeypad .key{
+  background:#333;color:#fff;border-radius:10px;font-size:1.3rem;padding:16px 0;
+  user-select:none;transition:transform .05s ease, background .05s ease;box-shadow:none;
+}
 
 /* user badge — bottom center */
 .user-badge{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);color:#aaa;background:transparent;padding:0;border-radius:0;font-size:.95rem;opacity:1;z-index:9999;display:none}
@@ -179,6 +187,19 @@ button.danger{background:#b30000}
 .radar span:nth-child(2){animation-delay:.3s}
 .radar span:nth-child(3){animation-delay:.6s}
 @keyframes radar{0%{transform:scale(.2);opacity:.9}100%{transform:scale(1);opacity:0}}
+
+/* big green plate with text for audit page */
+.radarPlate{
+  position:relative;width:min(78vw,340px);height:min(78vw,340px);
+  border-radius:50%;border:6px solid #1e8c1e;
+  box-shadow:inset 0 0 40px rgba(30,140,30,.35),0 0 40px rgba(30,140,30,.25);
+  margin:8px auto 16px;display:flex;align-items:center;justify-content:center;overflow:hidden
+}
+.radarText{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:22px;text-align:center}
+.radarText .big{font-size:1.8rem;font-weight:800;letter-spacing:.3px}
+.radarText .sub{margin-top:8px;font-size:1.05rem;color:#d3ffd3;line-height:1.35}
+.instruction-img.small-bottom{max-width:58vw;max-height:25vh;opacity:.9;margin-top:8px}
+
 #beginBtn{background:#fff!important;color:#000!important;border:2px solid #000;border-radius:12px;padding:14px 22px;font-size:1.15rem}
 
 /* done animation */
@@ -232,10 +253,15 @@ button.danger{background:#b30000}
 <div id="page3" class="page">
   <div id="auditMsgWrapper">
     <div class="card" style="width:min(92vw,560px);margin:0 auto">
-      <h2 id="auditMsg">Audit in progress</h2>
-      <div id="auditVisual" class="radar" aria-hidden="true"><span></span><span></span><span></span></div>
-      <img class="instruction-img" src="ScanTrolly.png" alt="Scan the trolley barcode" />
-      <div id="qrCodeAudit" style="margin-top:20px;"></div>
+      <div class="radarPlate">
+        <div id="auditVisual" class="radar" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div class="radarText">
+          <div class="big">Audit live</div>
+          <div class="sub">Scan the QR code on each item as you check it.<br/>When you’re finished, return to this iPad.</div>
+        </div>
+      </div>
+      <img class="instruction-img small-bottom" src="ScanTrolly.png" alt="Scanner and QR code" />
+      <div id="qrCodeAudit" style="margin-top:12px;"></div>
     </div>
   </div>
   <input id="hiddenScanner3" class="scanner" type="text" autocomplete="off">
@@ -245,7 +271,7 @@ button.danger{background:#b30000}
 <div id="page4" class="page">
   <div id="doneScreen">
     <div class="card" style="width:min(92vw,560px);margin:0 auto">
-      <h2>Scan here to upload</h2>
+      <h2>Finished your audit? Scan this code to upload</h2>
       <div class="upload-grid">
         <img id="ipadScanImg" class="scan-illustration" src="IPADSCAN.png" alt="Scan the iPad screen">
         <div id="uploadQr"></div>
@@ -444,8 +470,6 @@ bindKeypad('#keypad .key', (btn)=>{
 $("beginBtn").addEventListener("click", ()=>{
   // Instant navigation to page 3
   showPage("page3");
-  $("auditMsg").textContent = "Audit in progress — you can now begin scanning items for the audit.";
-  $("auditVisual").style.display = "block";
   $("qrCodeAudit").innerHTML="";
 
   // Fetch items in the background
@@ -468,6 +492,7 @@ $("hiddenScanner3").addEventListener("keydown", e=>{
 /* ---------- Page 4: Upload ---------- */
 function showUploadPage(){
   showPage("page4");
+  $("uploadQr").style.display = ""; // reset visible until first scan
   $("uploadQr").innerHTML="";
   new QRCode("uploadQr",{text:"^&032&^",width:240,height:240});
   $("visibleBulkInput").value="";
@@ -507,6 +532,8 @@ function addMany(text){
   if(capturedScans.size>before){
     hasUploadInput=true;
     scheduleAutoUpload();
+    // Hide the QR once scans start arriving
+    $("uploadQr").style.display = "none";
   }
 }
 function scheduleAutoUpload(){
@@ -653,17 +680,29 @@ function renderReviewTable(){
   }
 
   function validateSubmit(){
-    let count = 0, ok = true;
+    const totalRows = resolvedItems.length;
+    const rowHasChoice = new Array(totalRows).fill(false);
+    let tempsOk = true;
+
+    // mark rows that have at least one selection
     container.querySelectorAll('.rev-chk').forEach(chk=>{
-      if(chk.checked){ count++; }
+      if(chk.checked){
+        const idx = Number(chk.dataset.i);
+        if(!isNaN(idx)) rowHasChoice[idx] = true;
+      }
     });
-    // Temperature values must be filled if any temp is ticked
-    const tempInputs = $("tempRows") ? $("tempRows").querySelectorAll('.temp-input') : [];
-    tempInputs.forEach(inp=>{
-      const v = (inp.value || "").trim();
-      if(!/^\d{1,2}$/.test(v)) ok = false;
-    });
-    $("submitChecksBtn").disabled = !(count>0 && ok);
+
+    // validate any temperature inputs present (only appear when ticked)
+    const tempInputsHost = $("tempRows");
+    if(tempInputsHost){
+      tempInputsHost.querySelectorAll('.temp-input').forEach(inp=>{
+        const v = (inp.value||'').trim();
+        if(!/^[0-9]{1,2}$/.test(v)) tempsOk = false;
+      });
+    }
+
+    const allRowsSatisfied = rowHasChoice.every(Boolean);
+    $("submitChecksBtn").disabled = !(allRowsSatisfied && tempsOk);
   }
 
   container.querySelectorAll('.rev-chk').forEach(el=>{
