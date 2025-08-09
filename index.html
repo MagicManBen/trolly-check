@@ -7,18 +7,34 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 h1,h2{margin:0 0 20px}
-/* ---------- core look & feel ---------- */
-body{margin:0;background:#141314;background:rgba(20,19,20,1);color:#fff;font-family:Arial,sans-serif;text-align:center;padding:40px}
-h1,h2{margin:0 0 20px}
+
+/* ---------- modern core look & feel ---------- */
+body{
+  margin:0;
+  background: radial-gradient(1200px 800px at 50% -10%, #1b1b1b 0%, #141314 55%, #0f0f0f 100%);
+  color:#fff;
+  font-family:Arial,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  text-align:center;
+  padding:40px;
+}
 input,button,select,textarea{font-size:1rem;padding:10px;border:none;border-radius:6px}
 input[type=password],input[type=text]{background:#111;color:#fff;letter-spacing:8px;width:160px;text-align:center}
-button{cursor:pointer;background:#1e8c1e;color:#fff}
+button{
+  cursor:pointer;
+  background:#1e8c1e;
+  color:#fff;
+  border-radius:12px;
+  box-shadow:0 8px 18px rgba(30,140,30,.25), inset 0 -2px 0 rgba(0,0,0,.25);
+  transition:transform .08s ease, box-shadow .2s ease, opacity .2s ease;
+}
+button:hover{ box-shadow:0 10px 22px rgba(30,140,30,.35), inset 0 -2px 0 rgba(0,0,0,.25); }
+button:active{ transform:translateY(1px) scale(.99); }
 #status{margin-top:15px;font-weight:bold}
 #welcome{margin-top:10px;font-size:1.2rem;color:#1e8c1e}
 
 /* keypad */
 #keypad{margin:25px auto 10px;display:grid;grid-template-columns:repeat(3,80px);gap:10px;justify-content:center}
-#keypad .key{background:#333;color:#fff;border-radius:8px;font-size:1.3rem;padding:16px 0;user-select:none;transition:transform .05s ease, background .05s ease}
+#keypad .key{background:#333;color:#fff;border-radius:10px;font-size:1.3rem;padding:16px 0;user-select:none;transition:transform .05s ease, background .05s ease}
 #keypad .wide{grid-column:span 3}
 #keypad .zero{grid-column:2}
 
@@ -59,8 +75,8 @@ button{cursor:pointer;background:#1e8c1e;color:#fff}
 /* review table (Page 5) */
 .review-wrap{width:96%;max-width:980px;margin:0 auto}
 .review-note{color:#bbb;margin:6px 0 14px;font-size:.95rem}
-.table{width:100%;border-collapse:collapse;background:#fff;color:#000;border-radius:8px;overflow:hidden;table-layout:fixed}
-.table th,.table td{border:1px solid #ddd;padding:8px;vertical-align:middle;text-align:center}
+.table{width:100%;border-collapse:collapse;background:#fff;color:#000;border-radius:14px;overflow:hidden;table-layout:fixed;box-shadow:0 14px 30px rgba(0,0,0,.35)}
+.table th,.table td{border:1px solid #ddd;padding:10px;vertical-align:middle;text-align:center}
 .table th{background:#f3f3f3;font-weight:600;font-size:.95rem}
 .table td.item-col,.table td.room-col{text-align:left}
 .table td.item-col{width:30%}
@@ -68,48 +84,82 @@ button{cursor:pointer;background:#1e8c1e;color:#fff}
 .chk-cell{display:flex;align-items:center;justify-content:center;gap:6px}
 .chk-cell input[type="checkbox"]{transform:scale(1.2)}
 .actions{display:flex;gap:10px;justify-content:center;margin-top:16px}
-#submitChecksBtn{background:#1e8c1e;color:#fff;border-radius:8px;padding:12px 18px;font-size:1.05rem}
+#submitChecksBtn{background:#1e8c1e;color:#fff;border-radius:12px;padding:12px 18px;font-size:1.05rem}
 #submitChecksBtn[disabled]{opacity:.6;cursor:not-allowed}
 .success-msg{color:#1e8c1e;font-weight:bold;margin-top:10px}
 .error-msg{color:#ff6961;font-weight:bold;margin-top:10px}
 
 /* temperature panel below table */
-#tempSection{display:none;margin:12px 0 6px;padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:8px;width:96%;max-width:980px}
+#tempSection{display:none;margin:12px 0 6px;padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:12px;width:96%;max-width:980px}
 #tempSection h3{margin:0 0 8px;font-size:1.05rem;color:#ddd}
 .temp-row{display:grid;grid-template-columns:1.2fr .8fr auto;gap:10px;align-items:center;margin:6px 0}
 .temp-row .label{color:#ddd;text-align:left}
-.temp-input{width:56px;padding:6px 8px;border:1px solid #bbb;border-radius:6px;font-size:1rem;text-align:center}
+.temp-input{width:56px;padding:6px 8px;border:1px solid #bbb;border-radius:8px;font-size:1rem;text-align:center}
 .temp-hint{color:#aaa;font-size:.85rem;text-align:left}
+
+/* session comment */
+.comment-wrap{width:96%;max-width:980px;margin:12px auto 0}
+#sessionComment{
+  width:100%;
+  min-height:64px;
+  background:#111;
+  color:#fff;
+  border:1px solid #333;
+  border-radius:12px;
+  padding:10px 12px;
+  font-size:1rem;
+  resize:vertical;
+}
 
 /* + button & modal styles */
 button.danger{background:#b30000}
 #plusBtn{position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);right:calc(env(safe-area-inset-right,0px) + 16px);width:48px;height:48px;border-radius:50%;font-size:28px;padding:6px 0;z-index:10000}
 #modal{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;justify-content:center;align-items:center}
-#box{background:#222;padding:20px;border-radius:8px;width:90%;max-width:380px}
+#box{background:#222;padding:20px;border-radius:12px;width:90%;max-width:380px}
 #box select,#box input{width:100%;margin:6px 0}
 
 /* modal keypad */
 #modalKeypad{margin:10px auto;display:grid;grid-template-columns:repeat(3,80px);gap:10px;justify-content:center}
-#modalKeypad .key{background:#333;color:#fff;border-radius:8px;font-size:1.3rem;padding:16px 0;user-select:none;transition:transform .05s ease, background .05s ease}
+#modalKeypad .key{background:#333;color:#fff;border-radius:10px;font-size:1.3rem;padding:16px 0;user-select:none;transition:transform .05s ease, background .05s ease}
 
 /* user badge — bottom center */
 .user-badge{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);color:#aaa;background:transparent;padding:0;border-radius:0;font-size:.95rem;opacity:1;z-index:9999;display:none}
 
-/* page 2 spacing */
+/* page 2 spacing + bigger instruction */
 #qrCodeWrapper{gap:28px}
 #clickText{margin-top:28px}
+#qrTitle{
+  font-size:1.7rem;
+  font-weight:800;
+  letter-spacing:.3px;
+  text-shadow:0 2px 10px rgba(0,0,0,.6);
+  animation:glowText 1.4s ease-in-out infinite alternate;
+}
+@keyframes glowText{
+  from{ text-shadow:0 0 6px rgba(255,255,255,.4), 0 0 0 #1e8c1e; }
+  to{ text-shadow:0 0 14px rgba(255,255,255,.9), 0 0 18px rgba(30,140,30,.65); }
+}
+
 /* instructional images (responsive for vertical iPad) */
 .instruction-img{display:block;margin:16px auto 0;max-width:80vw;height:auto}
-
-/* page-specific image sizing for portrait iPad */
 #page1 .instruction-img{max-width:60vw;max-height:30vh;margin-top:12px}
 #page2 .instruction-img{max-width:70vw;max-height:32vh}
 #page3 .instruction-img{max-width:70vw;max-height:35vh;margin-top:16px}
 
+/* cards */
+.card{
+  background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:16px;
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  box-shadow:0 10px 30px rgba(0,0,0,.35);
+  padding:16px;
+}
+
 /* make page 2 stack start at top (not vertically centered) */
 #qrCodeWrapper{justify-content:flex-start;min-height:60vh;padding-top:10px;gap:18px}
-/* bigger, white Begin button */
-#beginBtn{background:#fff!important;color:#000!important;border:2px solid #000;border-radius:8px;padding:14px 22px;font-size:1.15rem}
+#beginBtn{background:#fff!important;color:#000!important;border:2px solid #000;border-radius:12px;padding:14px 22px;font-size:1.15rem}
 
 /* done animation */
 .done-wrap{position:relative;width:160px;height:160px;border-radius:50%;background:#0e0e0e;border:3px solid #1e8c1e;display:flex;align-items:center;justify-content:center;animation:pulse 1.8s ease-in-out 2}
@@ -120,11 +170,7 @@ button.danger{background:#b30000}
 .b3{animation:burst 1.2s .8s ease-out forwards}
 @keyframes draw{to{opacity:1;transform:rotate(-45deg) translateY(-6px) scale(1.05)}}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(30,140,30,.5)}50%{box-shadow:0 0 30px 6px rgba(30,140,30,.45)}}
-@keyframes burst{
-  0%{opacity:0;transform:translate(0,0) scale(0.8)}
-  50%{opacity:1}
-  100%{opacity:0;transform:translate(var(--x,0),var(--y,0)) scale(1)}
-}
+@keyframes burst{0%{opacity:0;transform:translate(0,0) scale(.8)}50%{opacity:1}100%{opacity:0;transform:translate(var(--x,0),var(--y,0)) scale(1)}}
 .b1{--x:-60px;--y:-20px}
 .b2{--x:50px;--y:-10px}
 .b3{--x:0px;--y:60px}
@@ -134,68 +180,70 @@ button.danger{background:#b30000}
 
 <!-- Page 1 – PIN -->
 <div id="page1" class="page active">
-<h1>Enter 4-Digit PIN</h1>
-<input id="pin" type="password" maxlength="4" placeholder="****">
-<div id="keypad">
-<button class="key" type="button">1</button><button class="key" type="button">2</button><button class="key" type="button">3</button>
-<button class="key" type="button">4</button><button class="key" type="button">5</button><button class="key" type="button">6</button>
-<button class="key" type="button">7</button><button class="key" type="button">8</button><button class="key" type="button">9</button>
-<button class="key zero" type="button">0</button>
-<button class="key wide" data-act="clear" type="button">Clear</button>
-</div>
-<img id="wristbandImg" class="instruction-img" src="WristBand.png" alt="Attach the wrist strap" />
-<button id="plusBtn" type="button">+</button>
-<div id="status"></div><div id="welcome"></div>
-<div id="loginSuccess" class="login-success">Login successful</div>
+  <h1>Enter 4-Digit PIN</h1>
+  <input id="pin" type="password" maxlength="4" placeholder="****">
+  <div id="keypad">
+    <button class="key" type="button">1</button><button class="key" type="button">2</button><button class="key" type="button">3</button>
+    <button class="key" type="button">4</button><button class="key" type="button">5</button><button class="key" type="button">6</button>
+    <button class="key" type="button">7</button><button class="key" type="button">8</button><button class="key" type="button">9</button>
+    <button class="key zero" type="button">0</button>
+    <button class="key wide" data-act="clear" type="button">Clear</button>
+  </div>
+  <img id="wristbandImg" class="instruction-img" src="WristBand.png" alt="Attach the wrist strap" />
+  <button id="plusBtn" type="button">+</button>
+  <div id="status"></div><div id="welcome"></div>
+  <div id="loginSuccess" class="login-success">Login successful</div>
 </div>
 
 <!-- Page 2 – BEGIN -->
 <div id="page2" class="page">
-<div id="qrCodeWrapper">
-<div id="qrTitle">Press button once and wait for two beeps</div>
-<img id="doubleBeepImg" class="instruction-img" src="DoubleDeep.png" alt="Wait for two beeps" />
-<div id="qrCode"></div>
-<div id="clickText">After 2 beeps, click the BEGIN button below</div>
-<button id="beginBtn" type="button" style="margin-top:8px">Begin</button>
-</div>
+  <div id="qrCodeWrapper">
+    <div class="card" style="width:min(92vw,560px);margin:0 auto">
+      <div id="qrTitle">Press button once and wait for two beeps</div>
+      <img id="doubleBeepImg" class="instruction-img" src="DoubleDeep.png" alt="Wait for two beeps" />
+      <div id="qrCode"></div>
+      <div id="clickText">After 2 beeps, click the BEGIN button below</div>
+      <button id="beginBtn" type="button" style="margin-top:8px">Begin</button>
+    </div>
+  </div>
 </div>
 
 <!-- Page 3 – Audit -->
 <div id="page3" class="page">
-<div id="auditMsgWrapper">
-<h2 id="auditMsg">Audit in progress</h2>
-<div id="auditVisual" class="spinner" style="border-top-color:#0000"></div>
-<img class="instruction-img" src="ScanTrolly.png" alt="Scan the trolley barcode" />
-<div id="qrCodeAudit" style="margin-top:20px;"></div>
-</div>
-<input id="hiddenScanner3" class="scanner" type="text" autocomplete="off">
+  <div id="auditMsgWrapper">
+    <h2 id="auditMsg">Audit in progress</h2>
+    <div id="auditVisual" class="spinner" style="border-top-color:#0000"></div>
+    <img class="instruction-img" src="ScanTrolly.png" alt="Scan the trolley barcode" />
+    <div id="qrCodeAudit" style="margin-top:20px;"></div>
+  </div>
+  <input id="hiddenScanner3" class="scanner" type="text" autocomplete="off">
 </div>
 
 <!-- Page 4 – Upload -->
 <div id="page4" class="page">
-<div id="doneScreen">
-<h2>Scan here to upload:</h2>
-<div id="uploadQr"></div>
-<input id="visibleBulkInput" autocomplete="off">
-<div id="scanCount">No scans captured yet.</div>
-<div id="progressAnim">
-<div class="progress-ring">
-<svg width="120" height="120">
-<circle class="progress-ring__bg" cx="60" cy="60" r="52"></circle>
-<circle class="progress-ring__circle" cx="60" cy="60" r="52"></circle>
-</svg>
-<div class="progress-ring__label" id="progressPercent">0%</div>
-</div>
-<div id="progressText">Uploading…</div>
-</div>
-</div>
+  <div id="doneScreen">
+    <h2>Scan here to upload:</h2>
+    <div id="uploadQr"></div>
+    <input id="visibleBulkInput" autocomplete="off">
+    <div id="scanCount">No scans captured yet.</div>
+    <div id="progressAnim">
+      <div class="progress-ring">
+        <svg width="120" height="120">
+          <circle class="progress-ring__bg" cx="60" cy="60" r="52"></circle>
+          <circle class="progress-ring__circle" cx="60" cy="60" r="52"></circle>
+        </svg>
+        <div class="progress-ring__label" id="progressPercent">0%</div>
+      </div>
+      <div id="progressText">Uploading…</div>
+    </div>
+  </div>
 </div>
 
 <!-- Page 5 – Results -->
 <div id="page5" class="page">
-  <div id="outputPage" class="review-wrap">
+  <div id="outputPage" class="review-wrap card">
     <h2>Review checks before submitting</h2>
-    <div class="review-note">Tick the checks performed. If you tick Temperature, enter the value below.</div>
+    <div class="review-note">Tick the checks performed. If you tick Temperature, enter the value below. You can add a single comment to apply to all rows.</div>
     <div id="reviewTable"></div>
 
     <!-- temperatures panel -->
@@ -203,6 +251,11 @@ button.danger{background:#b30000}
       <h3>Temperatures</h3>
       <div id="tempRows"></div>
       <div class="temp-hint">Enter a 1–2 digit value for each item you ticked as "Temperature".</div>
+    </div>
+
+    <!-- session comment -->
+    <div id="commentSection" class="comment-wrap">
+      <textarea id="sessionComment" maxlength="280" placeholder="Optional comment for this submission (applies to all checked items)…"></textarea>
     </div>
 
     <div class="actions">
@@ -227,22 +280,22 @@ button.danger{background:#b30000}
 
 <!-- + button & modal -->
 <div id="modal">
-<div id="box">
-<h2>Create PIN</h2>
-<select id="userSel"></select>
-<input id="pin1" type="password" maxlength="4" placeholder="New PIN" readonly />
-<input id="pin2" type="password" maxlength="4" placeholder="Confirm PIN" readonly />
-<div id="modalKeypad">
-<button class="key" type="button">1</button><button class="key" type="button">2</button><button class="key" type="button">3</button>
-<button class="key" type="button">4</button><button class="key" type="button">5</button><button class="key" type="button">6</button>
-<button class="key" type="button">7</button><button class="key" type="button">8</button><button class="key" type="button">9</button>
-<button class="key wide" data-act="clear" type="button">C</button>
-<button class="key" type="button">0</button><button class="key wide" data-act="del" type="button">←</button>
-</div>
-<button id="save" type="button">Save PIN</button>
-<button class="danger" id="cancel" type="button">Cancel</button>
-<div id="modalMsg"></div>
-</div>
+  <div id="box">
+    <h2>Create PIN</h2>
+    <select id="userSel"></select>
+    <input id="pin1" type="password" maxlength="4" placeholder="New PIN" readonly />
+    <input id="pin2" type="password" maxlength="4" placeholder="Confirm PIN" readonly />
+    <div id="modalKeypad">
+      <button class="key" type="button">1</button><button class="key" type="button">2</button><button class="key" type="button">3</button>
+      <button class="key" type="button">4</button><button class="key" type="button">5</button><button class="key" type="button">6</button>
+      <button class="key" type="button">7</button><button class="key" type="button">8</button><button class="key" type="button">9</button>
+      <button class="key wide" data-act="clear" type="button">C</button>
+      <button class="key" type="button">0</button><button class="key wide" data-act="del" type="button">←</button>
+    </div>
+    <button id="save" type="button">Save PIN</button>
+    <button class="danger" id="cancel" type="button">Cancel</button>
+    <div id="modalMsg"></div>
+  </div>
 </div>
 
 <!-- User badge -->
@@ -606,6 +659,7 @@ function renderReviewTable(){
 
 function buildSubmission(){
   const rows = [];
+  const sessionComment = ($("sessionComment")?.value || "").trim();
   const table = $("reviewTable");
   if(!table) return rows;
 
@@ -627,7 +681,7 @@ function buildSubmission(){
       Room: item.Room || "",
       CheckType: name,
       CheckValue: value || "Done",
-      Comment: ""
+      Comment: sessionComment
     });
   });
 
@@ -648,12 +702,27 @@ $("submitChecksBtn").addEventListener("click", async ()=>{
     };
     const res = await callFlow('submitChecks', payload);
     if(res && res.status === 'success'){
-      // Done animation then return to page 1
+      // Done animation then full reset back to page 1
       showPage("page6");
       setTimeout(()=>{
+        // clear temperature panel and comment
         const ts = $("tempSection"); if(ts){ ts.style.display="none"; }
         const tr = $("tempRows"); if(tr){ tr.innerHTML=""; }
+        const sc = $("sessionComment"); if(sc){ sc.value = ""; }
+        // clear review + state
+        $("reviewTable").innerHTML = "";
         $("submitMsg").innerHTML = "";
+        $("submitChecksBtn").disabled = true;
+        capturedScans.clear();
+        itemsData = [];
+        resolvedItems = [];
+        // reset login visuals on page 1
+        $("pin").value = "";
+        $("status").textContent = "";
+        $("welcome").textContent = "";
+        $("userBadge").style.display = "none";
+        loggedInUser = ""; // re-set on next successful PIN
+        // go home
         showPage("page1");
       }, 2500);
     }else{
