@@ -1096,6 +1096,14 @@ async function doUpload(){
   showPage("page5");
 }
 
+// Helper: get selected values from a <select multiple> in a Safari-friendly way (don't rely on .selectedOptions)
+function getSelectedValues(sel){
+  return Array.from(sel.options || [])
+    .filter(o => o.selected)
+    .map(o => String(o.value || "").trim())
+    .filter(v => v !== "");
+}
+
 function renderReviewTable(){
   const container = $("reviewTable");
   if(!container) return;
@@ -1145,7 +1153,7 @@ function renderReviewTable(){
   function updateTempSection(){
     const tempRows = [];
     container.querySelectorAll('.rev-select').forEach(sel=>{
-      const selected = Array.from(sel.selectedOptions).map(o=> (o.value||'').trim().toLowerCase());
+      const selected = getSelectedValues(sel).map(v => v.toLowerCase());
       if(selected.includes('temperature')){
         const idx = Number(sel.dataset.i);
         const it = resolvedItems[idx] || {};
@@ -1169,7 +1177,7 @@ function renderReviewTable(){
 
   function validateSubmit(){
     const selects = Array.from(container.querySelectorAll('.rev-select'));
-    const allSelected = selects.every(sel => Array.from(sel.selectedOptions).some(o => (o.value||'').trim() !== ''));
+    const allSelected = selects.every(sel => getSelectedValues(sel).length > 0);
     let tempsOk = true;
 
     const tempHost = $("tempRows");
@@ -1209,9 +1217,7 @@ function buildSubmission(){
   table.querySelectorAll('.rev-select').forEach(sel=>{
     const i = Number(sel.dataset.i);
     const item = resolvedItems[i] || {};
-    const selected = Array.from(sel.selectedOptions)
-      .map(o => String(o.value||""))
-      .filter(v => v !== "");
+    const selected = getSelectedValues(sel);
 
     if(!selected.length) return;
 
