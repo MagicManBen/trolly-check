@@ -1134,7 +1134,7 @@ function renderReviewTable(){
       `<td class="room-col">${item.Room || ""}</td>`+
       '<td>'+
         `<select class="rev-select" multiple data-i="${i}">`+
-          `${match ? '' : '<option value="" selected disabled hidden>Select…</option>'}`+
+          `${match ? '' : '<option value="" selected>Select…</option>'}`+
           choices.map(n => {
             const isSel = !!(match && n === match);
             return `<option value="${n}" ${isSel ? 'selected' : ''}>${n}</option>`;
@@ -1193,7 +1193,22 @@ function renderReviewTable(){
 
   // Bind change listeners
   container.querySelectorAll('.rev-select').forEach(el=>{
-    el.addEventListener('change', ()=>{ updateTempSection(); validateSubmit(); });
+    el.addEventListener('change', (e)=>{
+      const sel = e.currentTarget;
+      // If the placeholder ("Select…", value === "") is chosen, clear all other selections
+      const rawVals = Array.from(sel.options || []).filter(o => o.selected).map(o => o.value);
+      const chosePlaceholder = rawVals.includes("");
+      if(chosePlaceholder){
+        // keep only the placeholder selected
+        Array.from(sel.options || []).forEach(o => o.selected = (o.value === ""));
+      }else{
+        // ensure placeholder is unselected if any real option is chosen
+        const placeholder = Array.from(sel.options || []).find(o => o.value === "");
+        if(placeholder){ placeholder.selected = false; }
+      }
+      updateTempSection();
+      validateSubmit();
+    });
   });
   const tempHost = $("tempRows");
   if(tempHost){
