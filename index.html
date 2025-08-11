@@ -1134,7 +1134,7 @@ function renderReviewTable(){
       `<td class="room-col">${item.Room || ""}</td>`+
       '<td>'+
         `<select class="rev-select" multiple data-i="${i}">`+
-          `${match ? '' : '<option value="" disabled selected>Select…</option>'}`+
+          `${match ? '' : '<option value="" selected disabled hidden>Select…</option>'}`+
           choices.map(n => {
             const isSel = !!(match && n === match);
             return `<option value="${n}" ${isSel ? 'selected' : ''}>${n}</option>`;
