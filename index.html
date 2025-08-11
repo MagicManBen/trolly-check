@@ -159,15 +159,20 @@ button:active{ transform:translateY(1px) scale(.99); }
 .progress-ring__label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:bold}
 #progressText{margin-top:14px;font-size:1.4rem;color:#fff;font-weight:bold}
 
+. 
 /* review table (Page 5) */
+:root{
+  --item-col-w: 260px;  /* width for first fixed column (Item) */
+  --room-col-w: 160px;  /* width for second fixed column (Room) */
+}
 .review-wrap{width:96%;max-width:980px;margin:0 auto}
 .review-note{color:#bbb;margin:6px 0 14px;font-size:.95rem}
 .table{width:100%;border-collapse:collapse;background:#fff;color:#000;border-radius:14px;overflow:hidden;table-layout:fixed;box-shadow:0 14px 30px rgba(0,0,0,.35)}
 .table th,.table td{border:1px solid #ddd;padding:10px;vertical-align:middle;text-align:center}
 .table th{background:#f3f3f3;font-weight:600;font-size:.95rem}
 .table td.item-col,.table td.room-col{text-align:left}
-.table td.item-col{width:30%}
-.table td.room-col{width:14%}
+.table th.item-col,.table td.item-col{min-width:var(--item-col-w);width:var(--item-col-w)}
+.table th.room-col,.table td.room-col{min-width:var(--room-col-w);width:var(--room-col-w)}
 .chk-cell{display:flex;align-items:center;justify-content:center;gap:6px}
 .chk-cell input[type="checkbox"]{transform:scale(1.2)}
 .actions{display:flex;gap:10px;justify-content:center;margin-top:16px}
@@ -175,7 +180,24 @@ button:active{ transform:translateY(1px) scale(.99); }
 #submitChecksBtn[disabled]{opacity:.6;cursor:not-allowed}
 .success-msg{color:#1e8c1e;font-weight:bold;margin-top:10px}
 .error-msg{color:#ff6961;font-weight:bold;margin-top:10px}
-
+. 
+/* --- Review table UX improvements --- */
+.table-scroll{ width:100%; overflow:auto; border-radius:14px; -webkit-overflow-scrolling:touch }
+.table{ table-layout:fixed; }
+.table th,.table td{ white-space:nowrap }
+.table th.item-col,.table td.item-col{
+  position:sticky; left:0; z-index:4; background:#fff; box-shadow:4px 0 0 0 #ddd
+}
+.table thead th.item-col{ z-index:6; background:#f3f3f3 }
+.table th.room-col,.table td.room-col{
+  position:sticky; left:var(--item-col-w); z-index:3; background:#fff; box-shadow:4px 0 0 0 #ddd
+}
+.table thead th.room-col{ z-index:5; background:#f3f3f3 }
+.table th:not(.item-col):not(.room-col),
+.table td:not(.item-col):not(.room-col){ min-width:140px; max-width:140px }
+.table tbody tr:nth-child(even) td{ background:#fafafa }
+.table tbody tr:nth-child(even) td.item-col{ background:#f5f5f5 }
+.table tbody tr:nth-child(even) td.room-col{ background:#f5f5f5 }
 /* temperature panel below table */
 #tempSection{display:none;margin:12px 0 6px;padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:12px;width:96%;max-width:980px}
 #tempSection h3{margin:0 0 8px;font-size:1.05rem;color:#ddd}
@@ -457,6 +479,8 @@ button.danger{background:#b30000}
 
 #beginBtn{background:#fff!important;color:#000!important;border:2px solid #000;border-radius:12px;padding:14px 22px;font-size:1.15rem}
 
+</style>
+<style>
   /* done animation */
   .done-wrap{position:relative;width:160px;height:160px;border-radius:50%;background:#0e0e0e;border:3px solid #1e8c1e;display:flex;align-items:center;justify-content:center;animation:pulse 1.8s ease-in-out 2}
   .tick{width:60px;height:30px;border-left:6px solid #1e8c1e;border-bottom:6px solid #1e8c1e;transform:rotate(-45deg) translateY(-6px);opacity:0;animation:draw .6s .3s ease forwards}
@@ -484,6 +508,33 @@ button.danger{background:#b30000}
   .final-actions{display:flex;gap:10px;justify-content:center;margin-top:14px}
   #returnCountdown{color:#bbb;font-size:.95rem;margin-top:8px}
   #returnNowBtn{background:#2d2d2d}
+  /* --- All Set (Page 6) enhanced visuals --- */
+.allset-title{ margin-top:18px; font-weight:800; letter-spacing:.3px; animation:fadeUp .5s ease .2s both }
+@keyframes fadeUp{ from{ opacity:0; transform:translateY(6px) } to{ opacity:1; transform:translateY(0) } }
+
+.done-wrap::before,.done-wrap::after{
+  content:""; position:absolute; inset:-10px; border-radius:50%;
+  border:2px solid rgba(30,140,30,.55);
+  box-shadow:0 0 30px rgba(30,140,30,.45), inset 0 0 18px rgba(30,140,30,.25);
+  opacity:0; transform:scale(.85);
+  animation:halo 1.6s ease-out 2;
+}
+.done-wrap::after{ inset:-20px; border-width:2px; animation-delay:.2s }
+@keyframes halo{ 0%{ opacity:.5; transform:scale(.85) } 70%{ opacity:.22; transform:scale(1.12) } 100%{ opacity:0; transform:scale(1.25) } }
+
+/* lightweight confetti */
+.confetti{
+  position:fixed; top:-12px;
+  width:8px; height:12px;
+  background:linear-gradient(180deg,#fff,#cfe8cf);
+  border-radius:2px; opacity:.95;
+  will-change:transform,opacity;
+  animation:confettiFall var(--d,1200ms) cubic-bezier(.2,.8,.2,1) forwards;
+}
+.confetti:nth-child(3n){ background:linear-gradient(180deg,#1e8c1e,#84d284) }
+.confetti:nth-child(4n){ width:6px; height:10px }
+.confetti:nth-child(5n){ width:10px; height:14px }
+@keyframes confettiFall{ to{ transform:translateY(110vh) rotate(280deg); opacity:.9 } }
 </style>
 </head>
 <body>
@@ -591,7 +642,7 @@ button.danger{background:#b30000}
       <div class="burst b2"></div>
       <div class="burst b3"></div>
     </div>
-    <h2 style="margin-top:18px">All set!</h2>
+   <h2 class="allset-title">All set!</h2>
   </div>
 </div>
 <div id="page7" class="page">
@@ -656,9 +707,6 @@ button.danger{background:#b30000}
         <button id="addCheckTypeBtn" type="button" class="icon-btn">+</button>
       </div>
       <div class="hint" style="text-align:left;margin-top:8px">These appear as columns on the Review table. Rename or delete with the icons.</div>
-      <div class="actions">
-        <button id="saveCheckTypesBtn" type="button">Save</button>
-      </div>
     </div>
 
     <div id="adminMsg" style="margin-top:10px;min-height:1.2em"></div>
@@ -692,7 +740,7 @@ button.danger{background:#b30000}
 <div id="debug"><pre id="debugLog"></pre></div>
 
 <script>
-const FLOW_VALIDATE = "https://prod-89.westeurope.logic.azure.com:443/workflows/f1639be7e1a441a4a97130cb087ebe28/triggers/manual/paths/invoke?api-version=2016-06-01&sp=/triggers/manual/run&sv=1.0&sig=LX2eGuTosv-wKZinDs7z4TkpNTZ3POLUvMiiXftISOE";
+const FLOW_VALIDATE = "https://prod-122.westeurope.logic.azure.com:443/workflows/cc15d451ff7648e5b89b92298ed754a2/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=zi9Nq1-ZMmwUk3myWbp4wequvqSNSaLXEtJ0QlBrx3o";
 const FLOW_BASE = FLOW_VALIDATE;
 const FLOW = FLOW_VALIDATE;
 
@@ -1058,44 +1106,48 @@ function renderReviewTable(){
     return;
   }
 
-  // Columns come from Admin-managed check types
-  const columns = getCheckTypes();
+  // Choices come from Admin-managed check types
+  const choices = getCheckTypes();
 
-  // Build table header
-  let html = '<table class="table"><thead><tr>'+
+  // Build table (Item, Room, Check Type)
+  let html = '<div class="table-scroll"><table class="table"><thead><tr>'+
     '<th class="item-col">Item</th>'+
     '<th class="room-col">Room</th>'+
-    columns.map(n => `<th>${n}</th>`).join("")+
+    '<th>Check Type</th>'+
     '</tr></thead><tbody>';
 
-  // Build each row
   resolvedItems.forEach((item, i)=>{
-    const checks = Array.isArray(item.Checks) ? item.Checks : [];
-    const hasByName = Object.fromEntries(checks.map(c => [String(c.Name || ""), c]));
+    // Determine suggested value, match case-insensitive
+    const suggestedRaw = (item.CheckType || item.SelectedCheckType || "").toString();
+    const match = choices.find(c => c.toLowerCase() === suggestedRaw.toLowerCase());
 
-    html += `<tr>`+
+    html += '<tr>'+
       `<td class="item-col">${item.ItemName || item.ItemID}</td>`+
-      `<td class="room-col">${item.Room || ""}</td>`;
-
-    columns.forEach(name=>{
-      html += `<td><div class="chk-cell">
-        <input type="checkbox" class="rev-chk" data-i="${i}" data-name="${name}">
-      </div></td>`;
-    });
-
-
-    html += `</tr>`;
+      `<td class="room-col">${item.Room || ""}</td>`+
+      '<td>'+
+        `<select class="rev-select" multiple data-i="${i}">`+
+          `${match ? '' : '<option value="" disabled selected>Select…</option>'}`+
+          choices.map(n => {
+            const isSel = !!(match && n === match);
+            return `<option value="${n}" ${isSel ? 'selected' : ''}>${n}</option>`;
+          }).join("")+
+        '</select>'+
+      '</td>'+
+    '</tr>';
   });
 
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   container.innerHTML = html;
+  updateTempSection();
+  validateSubmit();
 
   // --- Temperature panel logic ---
   function updateTempSection(){
     const tempRows = [];
-    container.querySelectorAll('.rev-chk').forEach(chk=>{
-      if(chk.checked && String(chk.dataset.name||"").toLowerCase()==="temperature"){
-        const idx = Number(chk.dataset.i);
+    container.querySelectorAll('.rev-select').forEach(sel=>{
+      const selected = Array.from(sel.selectedOptions).map(o=> (o.value||'').trim().toLowerCase());
+      if(selected.includes('temperature')){
+        const idx = Number(sel.dataset.i);
         const it = resolvedItems[idx] || {};
         tempRows.push({i: idx, item: it});
       }
@@ -1116,36 +1168,24 @@ function renderReviewTable(){
   }
 
   function validateSubmit(){
-    const totalRows = resolvedItems.length;
-    const rowHasChoice = new Array(totalRows).fill(false);
+    const selects = Array.from(container.querySelectorAll('.rev-select'));
+    const allSelected = selects.every(sel => Array.from(sel.selectedOptions).some(o => (o.value||'').trim() !== ''));
     let tempsOk = true;
 
-    // mark rows that have at least one selection
-    container.querySelectorAll('.rev-chk').forEach(chk=>{
-      if(chk.checked){
-        const idx = Number(chk.dataset.i);
-        if(!isNaN(idx)) rowHasChoice[idx] = true;
-      }
-    });
-
-    // validate any temperature inputs present (only appear when ticked)
-    const tempInputsHost = $("tempRows");
-    if(tempInputsHost){
-      tempInputsHost.querySelectorAll('.temp-input').forEach(inp=>{
+    const tempHost = $("tempRows");
+    if(tempHost){
+      tempHost.querySelectorAll('.temp-input').forEach(inp=>{
         const v = (inp.value||'').trim();
         if(!/^[0-9]{1,2}$/.test(v)) tempsOk = false;
       });
     }
 
-    const allRowsSatisfied = rowHasChoice.every(Boolean);
-    $("submitChecksBtn").disabled = !(allRowsSatisfied && tempsOk);
+    $("submitChecksBtn").disabled = !(allSelected && tempsOk);
   }
 
-  container.querySelectorAll('.rev-chk').forEach(el=>{
-    el.addEventListener('change', ()=>{
-      if(String(el.dataset.name||"").toLowerCase()==="temperature"){ updateTempSection(); }
-      validateSubmit();
-    });
+  // Bind change listeners
+  container.querySelectorAll('.rev-select').forEach(el=>{
+    el.addEventListener('change', ()=>{ updateTempSection(); validateSubmit(); });
   });
   const tempHost = $("tempRows");
   if(tempHost){
@@ -1153,6 +1193,7 @@ function renderReviewTable(){
       if(e.target && e.target.classList.contains('temp-input')) validateSubmit();
     });
   }
+
   // Initial state
   $("tempSection").style.display = "none";
   $("tempRows").innerHTML = "";
@@ -1165,25 +1206,32 @@ function buildSubmission(){
   const table = $("reviewTable");
   if(!table) return rows;
 
-  // For every checked box, create a row (Temperature value comes from panel)
-  table.querySelectorAll('.rev-chk:checked').forEach(chk=>{
-    const i = Number(chk.dataset.i);
-    const name = String(chk.dataset.name || "");
+  table.querySelectorAll('.rev-select').forEach(sel=>{
+    const i = Number(sel.dataset.i);
     const item = resolvedItems[i] || {};
+    const selected = Array.from(sel.selectedOptions)
+      .map(o => String(o.value||""))
+      .filter(v => v !== "");
 
-    let value = "Done";
-    if(name.toLowerCase()==="temperature"){
+    if(!selected.length) return;
+
+    // If Temperature is among selections, read its value once per item
+    let tempValue = "";
+    if(selected.some(v => v.toLowerCase()==="temperature")){
       const valEl = $("tempRows") ? $("tempRows").querySelector(`.temp-input[data-i="${i}"]`) : null;
-      value = (valEl?.value || "").trim();
+      tempValue = (valEl?.value || "").trim();
     }
 
-    rows.push({
-      ItemID: String(item.ItemID || ""),
-      ItemName: item.ItemName || "",
-      Room: item.Room || "",
-      CheckType: name,
-      CheckValue: value || "Done",
-      Comment: sessionComment
+    selected.forEach(name => {
+      const isTemp = name.toLowerCase() === "temperature";
+      rows.push({
+        ItemID: String(item.ItemID || ""),
+        ItemName: item.ItemName || "",
+        Room: item.Room || "",
+        CheckType: name,
+        CheckValue: isTemp ? (tempValue || "") : "Done",
+        Comment: sessionComment
+      });
     });
   });
 
@@ -1212,6 +1260,25 @@ function goHomeReset(){
   // cancel any timers
   if(_returnTimer){ clearInterval(_returnTimer); _returnTimer=null; }
   showPage("page1");
+}
+function startAllSetAnimation(){
+  const host = document.getElementById('page6');
+  if(!host) return;
+  // Restart tick/burst animations if revisiting
+  const tick = host.querySelector('.tick');
+  if(tick){ tick.style.animation = 'none'; tick.offsetHeight; tick.style.animation = ''; }
+  host.querySelectorAll('.burst').forEach(b=>{ b.style.animation='none'; b.offsetHeight; b.style.animation=''; });
+  // Confetti burst
+  const N = 36;
+  for(let i=0;i<N;i++){
+    const s = document.createElement('span');
+    s.className = 'confetti';
+    s.style.left = (Math.random()*100) + 'vw';
+    s.style.setProperty('--d', (800 + Math.random()*1200).toFixed(0) + 'ms');
+    s.style.transform = `translateY(-10px) rotate(${Math.random()*360}deg)`;
+    host.appendChild(s);
+    setTimeout(()=> s.remove(), 1800);
+  }
 }
 function showFinalResetPage(){
   showPage("page7");
@@ -1250,9 +1317,11 @@ $("submitChecksBtn").addEventListener("click", async ()=>{
     };
     const res = await callFlow('submitChecks', payload);
     if(res && res.status === 'success'){
-      // Show the "All set" animation briefly, then move to the final reset step (Page 7)
-      showPage("page6");
-      setTimeout(()=>{ showFinalResetPage(); }, 1400);
+      // Show the "All set" animation long enough for the full sequence, then move to the final reset step (Page 7)
+// Show the All set screen for 3s with enhanced animation, then move to final reset
+showPage("page6");
+startAllSetAnimation();
+setTimeout(()=>{ showFinalResetPage(); }, 3000);
     }else{
       $("submitMsg").innerHTML = `<div class="error-msg">Submission failed.</div>`;
       $("submitChecksBtn").disabled = false;
@@ -1432,29 +1501,6 @@ $("save").onclick = async () => {
 </script>
 
 <script>
-
-// --- Admin: Check Types sync with Flow ---
-async function fetchCheckTypesFromFlow(){
-  try{
-    const msgEl = $("adminMsg");
-    if(msgEl) msgEl.textContent = "Loading…";
-    const res = await callFlow("getCheckTypes", {});
-    let types = [];
-    if(Array.isArray(res))                types = res;                     // bare array
-    else if(Array.isArray(res?.CheckTypes)) types = res.CheckTypes;       // { CheckTypes: [...] }
-    else if(Array.isArray(res?.checkTypes)) types = res.checkTypes;       // { checkTypes: [...] }
-    else if(Array.isArray(res?.result))     types = res.result;            // { result: [...] }
-    types = (types||[]).map(x=>String(x).trim()).filter(Boolean);
-    if(types.length){ saveCheckTypes(types); }
-    renderCheckTypeList();
-    if(msgEl) msgEl.textContent = "";
-  }catch(e){
-    const msgEl = $("adminMsg");
-    if(msgEl) msgEl.textContent = "Couldn't load from server. Showing local list.";
-    renderCheckTypeList();
-  }
-}
-
 function renderAdminDots(len){
   const dots = document.querySelectorAll('#adminPinDots .pin-dot');
   dots.forEach((d,i)=> d.classList.toggle('filled', i < len));
@@ -1514,14 +1560,12 @@ bindKeypad('#adminPinKeypad .key', (btn)=>{
   }
 });
 
-// Async version: fetches from Flow, then shows UI
-async function showChecksManager(){
-  $("adminMsg").textContent = "Loading…";
+function showChecksManager(){
+  $("adminMsg").textContent = "";
   $("adminMenu").style.display = "none";
   $("adminAddUserForm").style.display = "none";
   $("adminChecksForm").style.display = "block";
-  await fetchCheckTypesFromFlow(); // pulls from Flow, updates local cache, renders list
-  $("adminMsg").textContent = "";
+  renderCheckTypeList();
 }
 function renderCheckTypeList(){
   const host = $("checkTypeList"); if(!host) return;
@@ -1575,22 +1619,6 @@ $("checkTypeList")?.addEventListener("click", (e)=>{
       renderCheckTypeList();
       if(document.querySelector('#page5.active')){ renderReviewTable(); }
     }
-  }
-});
-
-// Save Check Types to Flow
-$("saveCheckTypesBtn")?.addEventListener("click", async ()=>{
-  const types = getCheckTypes();
-  $("adminMsg").textContent = "Saving…";
-  try{
-    const res = await callFlow("saveCheckTypes", { CheckTypes: types });
-    if(res && (res.status === "success" || res.ok === true)){
-      $("adminMsg").textContent = "✅ Saved";
-    }else{
-      $("adminMsg").textContent = "❌ Save failed";
-    }
-  }catch(e){
-    $("adminMsg").textContent = "Network error";
   }
 });
 </script>
