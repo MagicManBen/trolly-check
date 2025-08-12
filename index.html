@@ -39,6 +39,8 @@
     .hr { border-top:1px solid var(--line); margin:14px 0; }
     .list { max-height: 260px; overflow:auto; border:1px solid var(--line); border-radius:10px; padding:10px; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .art { margin: 16px auto 4px; display:flex; justify-content:center; gap:12px; flex-wrap:wrap; }
+    .art img { max-width: 360px; width: 90%; height: auto; border-radius: 12px; border:1px solid var(--line); background:#0f1216; }
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
@@ -71,6 +73,7 @@
   <div class="wrap hidden" id="screen-pin">
     <div class="panel center">
       <h2>Enter 4 digit PIN</h2>
+      <div class="art"><img src="IPADSCAN.png" alt="Enter PIN illustration"></div>
       <div class="pin-dots">
         <div class="dot" id="d1"></div><div class="dot" id="d2"></div><div class="dot" id="d3"></div><div class="dot" id="d4"></div>
       </div>
@@ -91,6 +94,7 @@
     <div class="panel center">
       <h2>Press button once and wait for two beeps</h2>
       <p class="muted">After 2 beeps, click the BEGIN button below</p>
+      <div class="art"><img src="PlugIn.png" alt="Prepare scanner / plug in"></div>
       <div class="pad"><button class="btn primary" id="btnBegin">Begin</button></div>
       <p class="muted">Auditing: <span id="whoName">—</span></p>
     </div>
@@ -100,6 +104,10 @@
     <div class="panel center" style="width:min(780px, 96vw)">
       <h2>Audit in progress</h2>
       <p class="muted">Scan the QR on each item as you check it. When finished, return to this iPad.</p>
+      <div class="art">
+        <img src="ScanTrolly.png" alt="Scan the trolley QR">
+        <img src="DoubleDeep.png" alt="Deep scan guidance">
+      </div>
       <div class="hr"></div>
       <p class="muted">Scanned: <span id="scanCount">0</span></p>
       <div class="list mono" id="scanList"></div>
@@ -111,6 +119,7 @@
   <div class="wrap hidden" id="screen-review">
     <div class="panel center" style="width:min(820px, 96vw)">
       <h2>Review & Submit</h2>
+      <div class="art"><img src="WristBand.png" alt="Wrist band / safety reminder"></div>
       <div class="row">
         <div style="flex:1">
           <label>Check type</label>
@@ -252,7 +261,7 @@
     $('btnBegin').addEventListener('click', ()=>{ S.scans = []; $('scanList').innerHTML=''; $('scanCount').textContent='0'; show('screen-scanning'); const i=$('scanInput'); i.classList.remove('hidden'); i.value=''; i.focus(); });
     $('scanInput').addEventListener('keydown', (e)=>{ if (e.key === 'Enter') { e.preventDefault(); const code = e.target.value.trim(); e.target.value=''; if (!code) return; addScan(code); } });
 
-    function addScan(code) { 
+    function addScan(code) {
       if (S.scans.includes(code)) return;
       S.scans.push(code);
       const known = S.itemsById.get(code);
