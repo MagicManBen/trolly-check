@@ -48,6 +48,93 @@
     .btn.light:active { transform: translateY(1px); }
     .fab { position: fixed; right: 22px; bottom: 22px; width:56px; height:56px; border-radius:50%; background: var(--accent); border: none; color:#04130a; font-size:28px; display:flex; justify-content:center; align-items:center; box-shadow: 0 10px 26px rgba(34,197,94,.40); }
     .footer { position: fixed; bottom: 10px; left:0; right:0; text-align:center; color: var(--muted); }
+    /* --- Audit in progress hero --- */
+    .audit-hero{
+      position:relative;
+      min-height:100vh;
+      width:100%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      overflow:hidden;
+      padding-top:40px;
+    }
+    .audit-center{
+      position:relative;
+      z-index:2;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:18px;
+      padding:32px 16px;
+      text-align:center;
+      width:100%;
+      max-width:780px;
+    }
+    .audit-ring{
+      position:relative;
+      width:min(78vw,380px);
+      height:min(78vw,380px);
+      border-radius:50%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .audit-ring:before,
+    .audit-ring:after{
+      content:"";
+      position:absolute; inset:0; border-radius:50%;
+    }
+    .audit-ring:before{
+      border:6px solid #1e8c1e;
+      box-shadow:inset 0 0 40px rgba(30,140,30,.35), 0 0 26px rgba(30,140,30,.25);
+      animation:pulseExpand 1.6s ease-in-out infinite;
+    }
+    .audit-ring:after{
+      content:"";
+      position:absolute; inset:-10px; border-radius:50%;
+      border:0;
+      box-shadow:0 0 0 0 rgba(30,140,30,.5);
+      animation:ripple 1.6s ease-out infinite;
+    }
+    .audit-title{
+      position:absolute;
+      text-align:center;
+      padding:0 24px;
+    }
+    .audit-title .big{
+      font-size:clamp(1.6rem, 3.8vw, 2.2rem);
+      font-weight:900;
+      letter-spacing:.3px;
+      text-shadow:0 2px 10px rgba(0,0,0,.6);
+    }
+    .audit-title .sub{
+      margin-top:8px;
+      font-size:clamp(1rem, 2.4vw, 1.15rem);
+      color:#d3ffd3;
+      line-height:1.35;
+    }
+    @keyframes pulseExpand{
+      0%{ transform:scale(.95) }
+      50%{ transform:scale(1.05) }
+      100%{ transform:scale(.95) }
+    }
+    @keyframes ripple{
+      0%{ box-shadow:0 0 0 0 rgba(30,140,30,.5); opacity:1 }
+      100%{ box-shadow:0 0 0 24px rgba(30,140,30,0); opacity:0 }
+    }
+    .scan-bottom{
+      position:fixed;
+      bottom:70px;
+      left:50%;
+      transform:translateX(-50%);
+      max-width:min(60vw, 360px);
+      width:90%;
+      height:auto;
+      z-index:1;
+      opacity:.95;
+    }
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -106,18 +193,18 @@
 
 
   <div class="wrap hidden" id="screen-scanning">
-    <div class="panel center" style="width:min(780px, 96vw)">
-      <h2>Audit in progress</h2>
-      <p class="muted">Scan the QR on each item as you check it. When finished, return to this iPad.</p>
-      <div class="art">
-        <img src="ScanTrolly.png" alt="Scan the trolley QR">
-        <img src="DoubleDeep.png" alt="Deep scan guidance">
+    <div class="panel center" style="background:transparent; box-shadow:none; width:100%; padding:0;">
+      <div class="audit-hero">
+        <div class="audit-center">
+          <div class="audit-ring" aria-hidden="true">
+            <div class="audit-title">
+              <div class="big">Audit in progress</div>
+              <div class="sub">Scan the QR on each item as you check it.<br>When finished, return to this iPad.</div>
+            </div>
+          </div>
+        </div>
+        <img src="ScanTrolly.png" alt="Scan items during your round" class="scan-bottom">
       </div>
-      <div class="hr"></div>
-      <p class="muted">Scanned: <span id="scanCount">0</span></p>
-      <div class="list mono" id="scanList"></div>
-      <div class="pad"><button class="btn primary" id="btnFinish">Finish audit</button></div>
-      <input id="scanInput" class="hidden" />
     </div>
   </div>
 
@@ -341,18 +428,13 @@
         show('screen-upload');
         showUploadQR();
         focusUploadInput();
-      }, 7000);
+      }, 10000);
     });
-    $('scanInput').addEventListener('keydown', (e)=>{ if (e.key === 'Enter') { e.preventDefault(); const code = e.target.value.trim(); e.target.value=''; if (!code) return; addScan(code); } });
 
     function addScan(code) {
       if (S.scans.includes(code)) return;
       S.scans.push(code);
-      const known = S.itemsById.get(code);
-      const line = known ? (code + ' — ' + known.item_name + ' (' + known.room + ')') : (code + ' — (Unknown item)');
-      const div = document.createElement('div'); div.textContent = line;
-      $('scanList').appendChild(div);
-      $('scanCount').textContent = String(S.scans.length);
+      // No on-page list during audit; items are reviewed later.
     }
 
     // Finish -> upload
