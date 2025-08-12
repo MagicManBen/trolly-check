@@ -106,6 +106,22 @@
     </div>
   </div>
 
+  <div class="wrap hidden" id="screen-admin-reset">
+    <div class="panel center">
+      <h2>Set a new Admin PIN</h2>
+      <p class="muted">Enter a new 4‑digit PIN to replace the default admin PIN. You'll use this to manage users and settings.</p>
+      <div class="row">
+        <input id="resetAdminPin1" placeholder="New 4‑digit PIN" inputmode="numeric" pattern="\d*" maxlength="4">
+        <input id="resetAdminPin2" placeholder="Confirm PIN" inputmode="numeric" pattern="\d*" maxlength="4">
+      </div>
+      <div class="pad">
+        <button class="btn primary" id="btnSaveAdminPin">Save new PIN</button>
+        <button class="btn" id="btnCancelResetPin">Cancel</button>
+      </div>
+      <p id="resetPinMsg" class="muted"></p>
+    </div>
+  </div>
+
   <div class="wrap hidden" id="screen-scanning">
     <div class="panel center" style="width:min(780px, 96vw)">
       <h2>Audit in progress</h2>
@@ -211,6 +227,15 @@
       </div>
       <ul id="typesList" class="list"></ul>
 
+      <div class="hr"></div>
+      <h3>Admin settings</h3>
+      <div class="row">
+        <input id="newAdminPin" placeholder="New 4‑digit admin PIN" inputmode="numeric" pattern="\d*" maxlength="4">
+        <input id="newAdminPin2" placeholder="Confirm PIN" inputmode="numeric" pattern="\d*" maxlength="4">
+        <button class="btn" id="btnChangeAdminPin">Change PIN</button>
+      </div>
+      <p id="changeAdminPinMsg" class="muted"></p>
+
       <div class="pad"><button class="btn" id="btnCloseAdmin">Close</button></div>
       <p id="adminMsg" class="muted"></p>
     </div>
@@ -230,7 +255,7 @@
 
     // Helpers
     function $(id) { return document.getElementById(id); }
-    function show(id) { ['screen-login','screen-pin','screen-begin','screen-scanning','screen-upload','screen-review','screen-reset','screen-admin'].forEach(x => $(x).classList.add('hidden')); $(id).classList.remove('hidden'); }
+    function show(id) { ['screen-login','screen-pin','screen-begin','screen-scanning','screen-upload','screen-review','screen-reset','screen-admin','screen-admin-reset'].forEach(x => $(x).classList.add('hidden')); $(id).classList.remove('hidden'); }
     function toast(msg) { const t=$('toast'); t.textContent=msg; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'), 1600); }
     const sleep = (ms)=> new Promise(r=>setTimeout(r,ms));
     function pinDots(n) { for (let i=1;i<=4;i++) { const d=$('d'+i); if(!d) continue; d.classList.toggle('filled', i<=n); } }
@@ -306,15 +331,65 @@
 
     async function tryPin(p) {
       $('pinMsg').textContent = 'Checking…';
-      const { data, error } = await sb.from('kiosk_users').select('full_name, role').eq('site_id', S.siteId).eq('pin', p).limit(1);
-      if (error) { $('pinMsg').textContent = error.message; pin=''; pinDots(0); return; }
-      if (!data || !data.length) { $('pinMsg').textContent = 'Invalid PIN'; pin=''; pinDots(0); return; }
-      S.staff = { name: data[0].full_name, role: data[0].role };
-      $('footerWho').textContent = S.staff.name;
-      $('whoName').textContent = S.staff.name;
-      $('pinMsg').textContent = '';
-      pin=''; pinDots(0);
-      show('screen-begin');
+      try {
+        // If default admin PIN entered, either find or create the admin row, then force reset
+        if (p === DEFAULT_ADMIN_PIN) {
+          // See if an admin with the default PIN already exists for this site
+          let { data: adminRow, error: findErr } = await sb
+            .from('kiosk_users')
+            .select('id, full_name, role')
+            .eq('site_id', S.siteId)
+            .eq('role', 'admin')
+            .eq('pin', DEFAULT_ADMIN_PIN)
+            .limit(1)
+            .maybeSingle();
+
+          if (findErr) { $('pinMsg').textContent = findErr.message; pin=''; pinDots(0); return; }
+
+          if (!adminRow) {
+            // Create a placeholder admin using the default PIN so we have a row to update
+            const { data: ins, error: insErr } = await sb
+              .from('kiosk_users')
+              .insert({ site_id: S.siteId, full_name: 'Admin User', pin: DEFAULT_ADMIN_PIN, role: 'admin', active: true })
+              .select('id, full_name')
+              .single();
+            if (insErr) { $('pinMsg').textContent = insErr.message; pin=''; pinDots(0); return; }
+            adminRow = ins;
+          }
+
+          // Stash admin id and route to forced reset screen
+          S.staff = { name: adminRow.full_name || 'Admin User', role: 'admin' };
+          S.adminUserId = adminRow.id;
+          $('footerWho').textContent = S.staff.name;
+          $('whoName').textContent = S.staff.name;
+          $('pinMsg').textContent = '';
+          pin=''; pinDots(0);
+          $('resetPinMsg').textContent = 'Please choose a new 4‑digit Admin PIN now.';
+          show('screen-admin-reset');
+          return;
+        }
+
+        // Normal kiosk user PIN path
+        const { data, error } = await sb
+          .from('kiosk_users')
+          .select('id, full_name, role')
+          .eq('site_id', S.siteId)
+          .eq('pin', p)
+          .limit(1);
+        if (error) { $('pinMsg').textContent = error.message; pin=''; pinDots(0); return; }
+        if (!data || !data.length) { $('pinMsg').textContent = 'Invalid PIN'; pin=''; pinDots(0); return; }
+
+        S.staff = { name: data[0].full_name, role: data[0].role };
+        S.adminUserId = (data[0].role === 'admin') ? data[0].id : null;
+        $('footerWho').textContent = S.staff.name;
+        $('whoName').textContent = S.staff.name;
+        $('pinMsg').textContent = '';
+        pin=''; pinDots(0);
+        show('screen-begin');
+      } catch (e) {
+        $('pinMsg').textContent = e.message || String(e);
+        pin=''; pinDots(0);
+      }
     }
 
     // Begin -> scanning, auto-advance to upload after 7 seconds
