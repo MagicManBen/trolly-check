@@ -41,8 +41,14 @@
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
     .art { margin: 16px auto 4px; display:flex; justify-content:center; gap:12px; flex-wrap:wrap; }
     .art img { max-width: 360px; width: 90%; height: auto; border-radius: 12px; border:1px solid var(--line); background:#0f1216; }
+    .glow { text-shadow: 0 2px 0 rgba(0,0,0,.6), 0 0 18px rgba(255,255,255,.35); }
+    .btn.light { background:#ffffff; border-color:#d1d5db; color:#111; font-weight:600; box-shadow: 0 8px 24px rgba(0,0,0,.25), 0 0 0 0 rgba(34,197,94,.0); }
+    .btn.light:active { transform: translateY(1px); }
+    .fab { position: fixed; right: 22px; bottom: 22px; width:56px; height:56px; border-radius:50%; background: var(--accent); border: none; color:#04130a; font-size:28px; display:flex; justify-content:center; align-items:center; box-shadow: 0 10px 26px rgba(34,197,94,.40); }
+    .footer { position: fixed; bottom: 10px; left:0; right:0; text-align:center; color: var(--muted); }
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
   <div class="topbar">
@@ -73,7 +79,6 @@
   <div class="wrap hidden" id="screen-pin">
     <div class="panel center">
       <h2>Enter 4 digit PIN</h2>
-      <div class="art"><img src="IPADSCAN.png" alt="Enter PIN illustration"></div>
       <div class="pin-dots">
         <div class="dot" id="d1"></div><div class="dot" id="d2"></div><div class="dot" id="d3"></div><div class="dot" id="d4"></div>
       </div>
@@ -81,21 +86,20 @@
         <div class="key">1</div><div class="key">2</div><div class="key">3</div>
         <div class="key">4</div><div class="key">5</div><div class="key">6</div>
         <div class="key">7</div><div class="key">8</div><div class="key">9</div>
-        <div class="key">C</div><div class="key">0</div><div class="key">←</div>
+        <div class="key" style="grid-column:2">0</div>
       </div>
-      <div class="pad">
-        <button class="btn" id="btnCreatePin">+ Add / Edit users</button>
-      </div>
+      <div class="pad"><button class="btn" id="btnClearPin">Clear</button></div>
+      <div class="art"><img src="PlugIn.png" alt="Plug in the handheld"></div>
       <p id="pinMsg" class="muted"></p>
     </div>
   </div>
 
   <div class="wrap hidden" id="screen-begin">
     <div class="panel center">
-      <h2>Press button once and wait for two beeps</h2>
+      <h2 class="glow">Press button once and wait for two beeps</h2>
       <p class="muted">After 2 beeps, click the BEGIN button below</p>
-      <div class="art"><img src="PlugIn.png" alt="Prepare scanner / plug in"></div>
-      <div class="pad"><button class="btn primary" id="btnBegin">Begin</button></div>
+      <div class="art"><img src="DoubleDeep.png" alt="Press the handheld once"></div>
+      <div class="pad"><button class="btn light" id="btnBegin">Begin</button></div>
       <p class="muted">Auditing: <span id="whoName">—</span></p>
     </div>
   </div>
@@ -134,6 +138,26 @@
       <div class="list mono" id="reviewList"></div>
       <div class="pad"><button class="btn primary" id="btnSubmit">Submit</button></div>
       <p id="submitMsg" class="muted"></p>
+    </div>
+  </div>
+
+  <div class="wrap hidden" id="screen-upload">
+    <div class="panel center">
+      <h2>Upload from scanner</h2>
+      <p class="muted">Scan this QR on the handheld to upload stored scans.</p>
+      <div class="art"><div id="qrUpload"></div></div>
+      <p class="muted mono">Value: ^&032&^</p>
+      <div class="pad"><button class="btn primary" id="btnUploaded">Continue</button></div>
+    </div>
+  </div>
+
+  <div class="wrap hidden" id="screen-reset">
+    <div class="panel center">
+      <h2>Final reset</h2>
+      <p class="muted">After submitting, clear the handheld memory.</p>
+      <div class="art"><div id="qrReset"></div></div>
+      <p class="muted mono">Value: ^&030&^</p>
+      <div class="pad"><button class="btn primary" id="btnResetDone">Done</button></div>
     </div>
   </div>
 
@@ -183,6 +207,8 @@
     </div>
   </div>
 
+  <button class="fab" id="btnFab">+</button>
+  <div class="footer">User: <span id="footerWho">—</span></div>
   <div id="toast" class="toast hidden"></div>
 
   <script>
@@ -195,10 +221,23 @@
 
     // Helpers
     function $(id) { return document.getElementById(id); }
-    function show(id) { ['screen-login','screen-pin','screen-begin','screen-scanning','screen-review','screen-admin'].forEach(x => $(x).classList.add('hidden')); $(id).classList.remove('hidden'); }
+    function show(id) { ['screen-login','screen-pin','screen-begin','screen-scanning','screen-upload','screen-review','screen-reset','screen-admin'].forEach(x => $(x).classList.add('hidden')); $(id).classList.remove('hidden'); }
     function toast(msg) { const t=$('toast'); t.textContent=msg; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'), 1600); }
     const sleep = (ms)=> new Promise(r=>setTimeout(r,ms));
     function pinDots(n) { for (let i=1;i<=4;i++) { const d=$('d'+i); if(!d) continue; d.classList.toggle('filled', i<=n); } }
+
+    // QR code rendering helpers
+    function renderQR(elId, text) {
+      const el = $(elId); if (!el) return;
+      el.innerHTML = '';
+      if (typeof QRCode !== 'undefined') {
+        new QRCode(el, { text, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+      } else {
+        el.textContent = text;
+      }
+    }
+    function showUploadQR() { renderQR('qrUpload', '^&032&^'); }
+    function showResetQR() { renderQR('qrReset', '^&030&^'); }
 
     // Ensure session -> get site -> show PIN
     async function init() {
@@ -232,18 +271,18 @@
       await init();
     });
 
-    $('btnLogout').addEventListener('click', async()=>{ await sb.auth.signOut(); location.reload(); });
+    $('btnLogout').addEventListener('click', async()=>{ await sb.auth.signOut(); $('footerWho').textContent = '—'; location.reload(); });
 
     // PIN keypad
     let pin = '';
     $('pad').addEventListener('click', async (e)=>{
       const k = e.target.closest('.key'); if (!k) return;
       const v = k.textContent.trim();
-      if (v === 'C') { pin=''; pinDots(0); return; }
-      if (v === '←') { pin = pin.slice(0,-1); pinDots(pin.length); return; }
       if (/^\d$/.test(v)) { if (pin.length<4) pin+=v; pinDots(pin.length); }
       if (pin.length === 4) { await tryPin(pin); }
     });
+    $('btnClearPin').addEventListener('click', ()=>{ pin=''; pinDots(0); });
+    $('btnFab').addEventListener('click', openUserManagement);
 
     async function tryPin(p) {
       $('pinMsg').textContent = 'Checking…';
@@ -251,6 +290,7 @@
       if (error) { $('pinMsg').textContent = error.message; pin=''; pinDots(0); return; }
       if (!data || !data.length) { $('pinMsg').textContent = 'Invalid PIN'; pin=''; pinDots(0); return; }
       S.staff = { name: data[0].full_name, role: data[0].role };
+      $('footerWho').textContent = S.staff.name;
       $('whoName').textContent = S.staff.name;
       $('pinMsg').textContent = '';
       pin=''; pinDots(0);
@@ -271,8 +311,10 @@
       $('scanCount').textContent = String(S.scans.length);
     }
 
-    // Finish -> review
-    $('btnFinish').addEventListener('click', async()=>{ await refreshReview(); show('screen-review'); });
+    // Finish -> upload
+    $('btnFinish').addEventListener('click', async()=>{ show('screen-upload'); showUploadQR(); });
+    $('btnUploaded').addEventListener('click', async()=>{ await refreshReview(); show('screen-review'); });
+    $('btnResetDone').addEventListener('click', ()=>{ show('screen-pin'); });
 
     async function refreshReview() {
       await preloadCache();
@@ -307,9 +349,9 @@
       if (e2) { $('submitMsg').textContent = e2.message; return; }
       $('submitMsg').textContent='Submitted!';
       toast('Submission uploaded');
-      await sleep(600);
       S.scans = []; $('scanList').innerHTML=''; $('scanCount').textContent='0'; $('comment').value='';
-      show('screen-pin');
+      show('screen-reset');
+      showResetQR();
     });
 
     // ----- Admin / Add-Edit Users (bootstrap first admin) -----
@@ -342,7 +384,7 @@
       show('screen-admin');
     }
 
-    $('btnCreatePin').addEventListener('click', openUserManagement);
+    $('btnCreatePin')?.addEventListener('click', openUserManagement);
     $('btnAdmin').addEventListener('click', openUserManagement);
     $('btnCloseAdmin').addEventListener('click', ()=> show('screen-pin'));
 
