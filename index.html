@@ -145,8 +145,10 @@
     <div class="panel center">
       <h2>Upload from scanner</h2>
       <p class="muted">Scan this QR on the handheld to upload stored scans.</p>
-      <div class="art"><div id="qrUpload"></div></div>
+      <div class="art" id="qrUploadWrap"><div id="qrUpload"></div></div>
       <p class="muted mono">Value: ^&032&^</p>
+      <p id="uploadStatus" class="muted hidden">Captured: <span id="capCount">0</span></p>
+      <input id="uploadInput" autocomplete="off" autocapitalize="off" spellcheck="false" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;" />
       <div class="pad"><button class="btn primary" id="btnUploaded">Continue</button></div>
     </div>
   </div>
@@ -238,6 +240,17 @@
     }
     function showUploadQR() { renderQR('qrUpload', '^&032&^'); }
     function showResetQR() { renderQR('qrReset', '^&030&^'); }
+    let uploadQuietTimer = null;
+    function focusUploadInput(){ const u=$('uploadInput'); if(!u) return; u.value=''; u.focus(); }
+    function scheduleUploadAutoContinue(){ if(uploadQuietTimer) clearTimeout(uploadQuietTimer); uploadQuietTimer = setTimeout(async ()=>{ await refreshReview(); show('screen-review'); }, 2000); }
+    // Helper to reset upload screen UI state
+    function resetUploadUI(){
+      if(uploadQuietTimer) { clearTimeout(uploadQuietTimer); uploadQuietTimer=null; }
+      const wrap=$('qrUploadWrap'); if(wrap) wrap.classList.remove('hidden');
+      const st=$('uploadStatus'); if(st) st.classList.add('hidden');
+      const cnt=$('capCount'); if(cnt) cnt.textContent='0';
+      const inp=$('uploadInput'); if(inp){ inp.value=''; }
+    }
 
     // Ensure session -> get site -> show PIN
     async function init() {
@@ -297,8 +310,19 @@
       show('screen-begin');
     }
 
-    // Begin -> scanning
-    $('btnBegin').addEventListener('click', ()=>{ S.scans = []; $('scanList').innerHTML=''; $('scanCount').textContent='0'; show('screen-scanning'); const i=$('scanInput'); i.classList.remove('hidden'); i.value=''; i.focus(); });
+    // Begin -> scanning, auto-advance to upload after 7 seconds
+    $('btnBegin').addEventListener('click', ()=>{
+      S.scans = [];
+      $('scanList').innerHTML = '';
+      $('scanCount').textContent = '0';
+      show('screen-scanning');
+      setTimeout(()=>{
+        resetUploadUI();
+        show('screen-upload');
+        showUploadQR();
+        focusUploadInput();
+      }, 7000);
+    });
     $('scanInput').addEventListener('keydown', (e)=>{ if (e.key === 'Enter') { e.preventDefault(); const code = e.target.value.trim(); e.target.value=''; if (!code) return; addScan(code); } });
 
     function addScan(code) {
@@ -312,7 +336,13 @@
     }
 
     // Finish -> upload
-    $('btnFinish').addEventListener('click', async()=>{ show('screen-upload'); showUploadQR(); });
+    $('uploadInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); const raw=e.target.value.trim(); e.target.value=''; const m=raw.match(/^\d{10}$/); if(!m){ scheduleUploadAutoContinue(); return; } const code=m[0]; if(!S.scans.includes(code)){ S.scans.push(code); $('capCount').textContent=String(S.scans.length); $('uploadStatus').classList.remove('hidden'); const wrap=$('qrUploadWrap'); if(wrap) wrap.classList.add('hidden'); } scheduleUploadAutoContinue(); }});
+    $('btnFinish').addEventListener('click', async()=>{
+      resetUploadUI();
+      show('screen-upload');
+      showUploadQR();
+      focusUploadInput();
+    });
     $('btnUploaded').addEventListener('click', async()=>{ await refreshReview(); show('screen-review'); });
     $('btnResetDone').addEventListener('click', ()=>{ show('screen-pin'); });
 
