@@ -503,30 +503,7 @@
 
     // ----- Admin / Add-Edit Users (bootstrap first admin) -----
     async function openUserManagement() {
-      if (!S.siteId) return;
-      // Do we already have an admin?
-      const { data: admins, error } = await sb.from('kiosk_users').select('id').eq('site_id', S.siteId).eq('role','admin').limit(1);
-      if (error) { toast(error.message); return; }
-      if (!admins || !admins.length) {
-        // First-run: create initial admin
-        const name = prompt('First admin name (e.g., Ben Howard)');
-        if (!name) return;
-        let p = prompt('Choose a 4-digit admin PIN');
-        if (!p) return;
-        p = (p || '').trim();
-        if (!/^\d{4}$/.test(p)) { toast('PIN must be 4 digits'); return; }
-        const { error: insErr } = await sb.from('kiosk_users').insert({ site_id: S.siteId, full_name: name, pin: p, role: 'admin' });
-        if (insErr) { toast(insErr.message); return; }
-        toast('Admin created');
-        await renderAdmin();
-        show('screen-admin');
-        return;
-      }
-      // Existing admin: require admin PIN to enter
-      const p = prompt('Enter Admin PIN');
-      if (!p) return;
-      const { data, error: chkErr } = await sb.from('kiosk_users').select('full_name').eq('site_id', S.siteId).eq('pin', p).eq('role','admin').limit(1);
-      if (chkErr || !data || !data.length) { toast('Invalid admin PIN'); return; }
+      if (!S.siteId) { toast('Please sign in first.'); return; }
       await renderAdmin();
       show('screen-admin');
     }
