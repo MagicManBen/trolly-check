@@ -22,11 +22,11 @@
     .btn:active { transform: translateY(1px); }
     .btn.primary { background:var(--accent); border-color:transparent; color:#04130a; font-weight:600; }
     .btn.danger { background:var(--danger); border-color:transparent; }
-    .grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; }
+    .grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; width:min(360px, 92%); margin:8px auto 0; }
     .pad { margin-top:14px; }
-    .key { padding:18px 0; border-radius:14px; background:#2b2f36; text-align:center; font-weight:600; font-size:20px; border:1px solid var(--line); }
-    .key:active { transform: translateY(1px); }
-    .pin-dots { display:flex; gap:10px; justify-content:center; margin:16px 0 6px; }
+    .key { height:64px; padding:0; border-radius:12px; background:#2f3339; text-align:center; font-weight:700; font-size:26px; border:1px solid #3a3f46; box-shadow: inset 0 2px 0 rgba(0,0,0,.35); display:flex; align-items:center; justify-content:center; }
+    .key:active { transform: scale(.98); }
+    .pin-dots { display:flex; gap:8px; justify-content:center; margin:10px 0 6px; }
     .dot { width:14px; height:14px; border-radius:50%; background:#30363f; }
     .dot.filled { background:#9fb3c8; }
     .row { display:flex; gap:10px; }
@@ -91,7 +91,7 @@
         <div class="key" style="grid-column:2">0</div>
       </div>
       <div class="pad"><button class="btn" id="btnClearPin">Clear</button></div>
-      <div class="art"><img src="PlugIn.png" alt="Plug in the handheld"></div>
+      <div class="art"><img src="WristBand.png" alt="Wrist band / safety reminder"></div>
       <p id="pinMsg" class="muted"></p>
     </div>
   </div>
@@ -260,6 +260,26 @@
     const sleep = (ms)=> new Promise(r=>setTimeout(r,ms));
     function pinDots(n) { for (let i=1;i<=4;i++) { const d=$('d'+i); if(!d) continue; d.classList.toggle('filled', i<=n); } }
 
+    // Simple keypad click using WebAudio (works on iOS after first tap)
+    let AC = null;
+    function playClick(freq = 420, dur = 0.07) {
+      try {
+        AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+        const o = AC.createOscillator();
+        const g = AC.createGain();
+        o.type = 'sine';
+        o.frequency.value = freq;
+        o.connect(g);
+        g.connect(AC.destination);
+        const now = AC.currentTime;
+        g.gain.setValueAtTime(0, now);
+        g.gain.linearRampToValueAtTime(0.14, now + 0.005);
+        g.gain.exponentialRampToValueAtTime(0.00001, now + dur);
+        o.start();
+        o.stop(now + dur + 0.02);
+      } catch(e) { /* no-op */ }
+    }
+
     // QR code rendering helpers
     function renderQR(elId, text) {
       const el = $(elId); if (!el) return;
@@ -323,10 +343,10 @@
     $('pad').addEventListener('click', async (e)=>{
       const k = e.target.closest('.key'); if (!k) return;
       const v = k.textContent.trim();
-      if (/^\d$/.test(v)) { if (pin.length<4) pin+=v; pinDots(pin.length); }
+      if (/^\d$/.test(v)) { playClick(); if (pin.length<4) pin+=v; pinDots(pin.length); }
       if (pin.length === 4) { await tryPin(pin); }
     });
-    $('btnClearPin').addEventListener('click', ()=>{ pin=''; pinDots(0); });
+    $('btnClearPin').addEventListener('click', ()=>{ playClick(300, 0.08); pin=''; pinDots(0); });
     $('btnFab').addEventListener('click', openUserManagement);
 
     async function tryPin(p) {
