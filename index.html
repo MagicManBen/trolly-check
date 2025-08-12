@@ -97,11 +97,10 @@
 
   <div class="wrap hidden" id="screen-begin">
     <div class="panel center">
-      <h2 class="glow">Press button once and wait for two beeps</h2>
+      <h2 class="glow">Press the circle button on the scanner once and wait for 2 beeps</h2>
       <p class="muted">After 2 beeps, click the BEGIN button below</p>
       <div class="art"><img src="DoubleDeep.png" alt="Press the handheld once"></div>
       <div class="pad"><button class="btn light" id="btnBegin">Begin</button></div>
-      <p class="muted">Auditing: <span id="whoName">—</span></p>
     </div>
   </div>
 
@@ -184,7 +183,20 @@
 
     // Helpers
     function $(id) { return document.getElementById(id); }
-    function show(id) { ['screen-login','screen-pin','screen-begin','screen-scanning','screen-upload','screen-review','screen-reset'].forEach(x => $(x).classList.add('hidden')); $(id).classList.remove('hidden'); }
+    let currentScreen = 'screen-login';
+    function setTopbarFor(id){
+      currentScreen = id;
+      const btn = $('btnLogout');
+      if (!btn) return;
+      const auditing = (id !== 'screen-login');
+      btn.textContent = auditing ? 'Exit Audit' : 'Logout';
+    }
+    function show(id) {
+      ['screen-login','screen-pin','screen-begin','screen-scanning','screen-upload','screen-review','screen-reset']
+        .forEach(x => $(x).classList.add('hidden'));
+      $(id).classList.remove('hidden');
+      setTopbarFor(id);
+    }
     function toast(msg) { const t=$('toast'); t.textContent=msg; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'), 1600); }
     const sleep = (ms)=> new Promise(r=>setTimeout(r,ms));
     function pinDots(n) { for (let i=1;i<=4;i++) { const d=$('d'+i); if(!d) continue; d.classList.toggle('filled', i<=n); } }
@@ -265,10 +277,28 @@
       await init();
     });
 
-    $('btnLogout').addEventListener('click', async()=>{ await sb.auth.signOut(); $('footerWho').textContent = '—'; location.reload(); });
+    $('btnLogout').addEventListener('click', onTopbarButton);
 
     // PIN keypad
     let pin = '';
+    function onTopbarButton(){
+      const auditing = (currentScreen !== 'screen-login');
+      if (auditing) {
+        if (!confirm('Are you sure? All progress will be lost.')) return;
+        // Reset audit state
+        S.scans = [];
+        pin = '';
+        pinDots(0);
+        resetUploadUI();
+        const sl = $('scanList'); if (sl) sl.innerHTML = '';
+        const sc = $('scanCount'); if (sc) sc.textContent = '0';
+        const cm = $('comment'); if (cm) cm.value = '';
+        show('screen-pin');
+        return;
+      }
+      // Full sign-out when not in an audit
+      sb.auth.signOut().then(()=>{ $('footerWho').textContent = '—'; location.reload(); });
+    }
     $('pad').addEventListener('click', async (e)=>{
       const k = e.target.closest('.key'); if (!k) return;
       const v = k.textContent.trim();
@@ -291,7 +321,6 @@
 
         S.staff = { name: data[0].full_name, role: data[0].role || 'staff' };
         $('footerWho').textContent = S.staff.name;
-        $('whoName').textContent = S.staff.name;
         $('pinMsg').textContent = '';
         pin=''; pinDots(0);
         show('screen-begin');
