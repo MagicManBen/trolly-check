@@ -442,7 +442,7 @@
       try{
         const { data, error } = await readClient()
           .from('items')
-          .select('item_id, item_name, room')
+          .select('item_id, item_name, room, default_check_type')
           .eq('site_id', siteId)
           .in('item_id', ids);
         if (!error && Array.isArray(data) && data.length) return data;
@@ -466,7 +466,7 @@
 
     // Preload items and types for fast lookup
     async function preloadCache() {
-      const i = await readClient().from('items').select('item_id, item_name, room').eq('site_id', S.siteId).order('item_name');
+      const i = await readClient().from('items').select('item_id, item_name, room, default_check_type').eq('site_id', S.siteId).order('item_name');
       if (!i.error) { S.itemsById.clear(); (i.data||[]).forEach(r=>S.itemsById.set(r.item_id, r)); }
       const t = await readClient().from('check_types').select('name').eq('site_id', S.siteId).order('name');
       if (!t.error) { S.types = (t.data||[]).map(r=>r.name); }
@@ -604,6 +604,10 @@
         for (const n of types) {
           const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o);
         }
+        // Prefer per-item default if present and valid; otherwise fall back to first type
+        const def = it && it.default_check_type;
+        if (def && types.includes(def)) sel.value = def;
+        else if (types.length) sel.value = types[0];
         tdType.appendChild(sel);
 
         tr.appendChild(tdName); tr.appendChild(tdRoom); tr.appendChild(tdType);
