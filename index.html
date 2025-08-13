@@ -382,13 +382,13 @@
 
     // Ensure session -> get site -> show PIN
 
-    // Lookup helper: fetch items by scanned IDs with string-cast + REST fallback
+    // Lookup helper: fetch items by scanned IDs with robust multi-try fallback
     async function fetchItemsByIds(siteId, codes){
       // Normalise to unique trimmed strings
       const ids = Array.from(new Set((codes||[]).map(c => String(c).trim())));
       if (!ids.length) return [];
 
-      // 1) Try the JS client first
+      // --- 1) JS client: straightforward .in() with strings ---
       try{
         const { data, error } = await sb
           .from('items')
@@ -396,16 +396,48 @@
           .eq('site_id', siteId)
           .in('item_id', ids);
         if (!error && Array.isArray(data) && data.length) return data;
-      }catch(e){ /* swallow and try fallback */ }
+      }catch(_){}
 
-      // 2) Fallback to REST (mirrors working curl)
-      const inList = `(${ids.join(',')})`;
-      const url = `${SUPABASE_URL}/rest/v1/items?select=item_id,item_name,room&site_id=eq.${siteId}&item_id=in.${inList}`;
+      // Prepare in-list variants (without quotes and with quotes)
+      const inListNoQuotes = `(${ids.join(',')})`;
+      const inListQuotes   = `(${ids.map(v => `"${v}"`).join(',')})`;
+
+      // --- 2) JS client: PostgREST-style filter (no quotes) ---
       try{
+        const { data, error } = await sb
+          .from('items')
+          .select('item_id, item_name, room')
+          .eq('site_id', siteId)
+          .filter('item_id', 'in', inListNoQuotes);
+        if (!error && Array.isArray(data) && data.length) return data;
+      }catch(_){}
+
+      // --- 3) JS client: PostgREST-style filter (with quotes) ---
+      try{
+        const { data, error } = await sb
+          .from('items')
+          .select('item_id, item_name, room')
+          .eq('site_id', siteId)
+          .filter('item_id', 'in', inListQuotes);
+        if (!error && Array.isArray(data) && data.length) return data;
+      }catch(_){}
+
+      // --- 4) Direct REST fallback (no quotes) ---
+      try{
+        const url = `${SUPABASE_URL}/rest/v1/items?select=item_id,item_name,room&site_id=eq.${siteId}&item_id=in.${encodeURI(inListNoQuotes)}`;
         const res = await fetch(url, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } });
         const rows = await res.json();
-        if (Array.isArray(rows)) return rows;
-      }catch(e){ /* ignore */ }
+        if (Array.isArray(rows) && rows.length) return rows;
+      }catch(_){}
+
+      // --- 5) Direct REST fallback (with quotes) ---
+      try{
+        const url = `${SUPABASE_URL}/rest/v1/items?select=item_id,item_name,room&site_id=eq.${siteId}&item_id=in.${encodeURI(inListQuotes)}`;
+        const res = await fetch(url, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } });
+        const rows = await res.json();
+        if (Array.isArray(rows)) return rows; // may be empty, return as-is
+      }catch(_){}
+
       return [];
     }
     async function init() {
