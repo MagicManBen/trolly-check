@@ -285,7 +285,6 @@
         </div>
       </div>
       <input id="uploadInput" autocomplete="off" autocapitalize="off" spellcheck="false" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;" />
-      <div class="pad"><button class="btn primary" id="btnUploaded">Continue</button></div>
     </div>
   </div>
 
@@ -493,7 +492,6 @@
 
     // Finish -> upload
     $('uploadInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); const raw=e.target.value.trim(); e.target.value=''; const m=raw.match(/^\d{10}$/); if(!m){ scheduleUploadAutoContinue(); return; } const code=m[0]; if(!S.scans.includes(code)){ const wasEmpty = S.scans.length === 0; S.scans.push(code); if (wasEmpty) { showUploadCounter(); } updateUploadCounter(); } scheduleUploadAutoContinue(); }});
-    $('btnUploaded').addEventListener('click', async()=>{ await refreshReview(); show('screen-review'); });
     $('btnResetDone').addEventListener('click', ()=>{ show('screen-pin'); });
 
     async function refreshReview() {
