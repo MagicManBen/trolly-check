@@ -96,6 +96,15 @@
       <thead><tr><th>Scanned ID</th><th>Status</th><th>Name</th><th>Room</th></tr></thead>
       <tbody id="matchBody"></tbody>
     </table>
+
+    <div class="hr"></div>
+
+    <h3>Copy Everything</h3>
+    <div class="row" style="margin:6px 0 10px">
+      <button class="btn" id="btnRefreshBundle">Refresh</button>
+      <button class="btn primary" id="btnCopyBundle">Copy all debug</button>
+    </div>
+    <textarea id="bundleBox" class="mono" style="width:100%; min-height:220px; background:#0f1216; border:1px solid var(--line); border-radius:10px; padding:10px;"></textarea>
   </div>
 </div>
 
@@ -150,6 +159,56 @@
     }
   }
 
+  function buildMatchesArray(){
+    const rows = (S.lastRes && S.lastRes.rows) ? S.lastRes.rows : [];
+    const byId = new Map((rows || []).map(r => [String(r.item_id).trim(), r]));
+    return Array.from(S.codes).map(code => {
+      const it = byId.get(code) || null;
+      return {
+        code,
+        found: !!it,
+        name: it ? it.item_name : null,
+        room: it ? it.room : null,
+      };
+    });
+  }
+
+  function buildBundle(){
+    const siteId = Number($('siteId').value || 1);
+    const uniqueCodes = Array.from(S.codes);
+    const invalidLast20 = S.scansRaw.slice(-20).filter(v => !/^\d{10}$/.test(v));
+    return {
+      meta: {
+        time: new Date().toISOString(),
+        location: window.location.href,
+        userAgent: navigator.userAgent,
+      },
+      supabase: {
+        url: SUPABASE_URL,
+        anonKeyPresent: !!SUPABASE_ANON_KEY,
+        siteId,
+        qrUploadValue: '^&032&^',
+      },
+      state: {
+        capturedCount: S.scansRaw.length,
+        uniqueCount: S.codes.size,
+        scansRawLast20: S.scansRaw.slice(-20),
+        uniqueCodes,
+        invalidLast20,
+      },
+      request: S.lastReq,
+      response: S.lastRes,
+      timing: { lastMs: S.lastMs },
+      matches: buildMatchesArray(),
+    };
+  }
+
+  function updateBundle(){
+    const box = $('bundleBox'); if(!box) return;
+    try { box.value = JSON.stringify(buildBundle(), null, 2); }
+    catch(e){ box.value = String(e); }
+  }
+
   // --- QR code: ^&032&^ (upload) ---
   function renderQRUpload(){
     const el = $('qr');
@@ -161,27 +220,38 @@
   // --- Lookup (the exact query you use on Review) ---
   async function runLookup(){
     const siteId = Number($('siteId').value || 1);
-    const codes = Array.from(S.codes);
+    const codes = Array.from(S.codes).map(c => String(c).trim()); // ensure strings
+    const postgrestIn = '(' + codes.join(',') + ')'; // mirrors working curl style
     const sbStatus = $('sbStatus');
 
     // Build request object for display
-    S.lastReq = { table: 'items', select: ['item_id','item_name','room'], filters: { site_id: siteId, item_id_in: codes } };
+    S.lastReq = {
+      table: 'items',
+      select: ['item_id','item_name','room'],
+      filters: { site_id: siteId, item_id_in: codes, postgrest_in: postgrestIn }
+    };
     renderReq();
 
     if (!codes.length){
       S.lastRes = { ok:false, error:'No codes to lookup' };
       renderRes();
       renderMatches([]);
+      updateBundle();
       return;
     }
 
     const t0 = performance.now();
-    const { data, error } = await sb
-      .from('items')
-      .select('item_id, item_name, room')
-      .eq('site_id', siteId)
-      .in('item_id', codes);  // .in filter per Supabase JS docs
-
+    let data = null, error = null;
+    try{
+      const resp = await sb
+        .from('items')
+        .select('item_id, item_name, room')
+        .eq('site_id', siteId)
+        .in('item_id', codes); // use typed strings directly
+      data = resp.data; error = resp.error || null;
+    }catch(e){
+      error = e;
+    }
     const t1 = performance.now();
     S.lastMs = Math.round(t1 - t0);
     $('lastMs').textContent = String(S.lastMs);
@@ -192,14 +262,37 @@
       S.lastRes = { ok:false, error };
       renderRes();
       renderMatches([]);
+      updateBundle();
       return;
+    }
+
+    // If the client call returned 0 rows, try a raw fetch that exactly mirrors the working curl
+    let altFetch = null;
+    if (!data || !data.length){
+      const rawUrl = `${SUPABASE_URL}/rest/v1/items?select=item_id,item_name,room&site_id=eq.${siteId}&item_id=in.(${codes.join(',')})`;
+      try {
+        const res = await fetch(rawUrl, {
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+        const altRows = await res.json();
+        altFetch = { url: rawUrl, status: res.status, returned: Array.isArray(altRows) ? altRows.length : null, rows: altRows };
+        if (Array.isArray(altRows) && altRows.length) {
+          data = altRows; // display alt result if it worked
+        }
+      } catch (e2) {
+        altFetch = { url: rawUrl, error: String(e2) };
+      }
     }
 
     sbStatus.textContent = 'ok';
     sbStatus.classList.add('ok'); sbStatus.classList.remove('err');
-    S.lastRes = { ok:true, returned: data?.length ?? 0, rows: data };
+    S.lastRes = { ok:true, returned: data?.length ?? 0, rows: data || [], altFetch };
     renderRes();
     renderMatches(data || []);
+    updateBundle();
   }
 
   // --- Capture scans from hidden input ---
@@ -218,6 +311,7 @@
 
     updateCounts();
     renderState();
+    updateBundle();
 
     // Auto-lookup (debounced by a small timeout to batch quick bursts)
     if ($('autoLookup').checked){
@@ -231,7 +325,21 @@
   $('btnClear').addEventListener('click', ()=>{
     S.scansRaw = []; S.codes.clear();
     updateCounts(); renderState(); S.lastReq = null; S.lastRes = null; renderReq(); renderRes(); renderMatches([]);
+    updateBundle();
     focusInput();
+  });
+
+  $('btnRefreshBundle').addEventListener('click', updateBundle);
+  $('btnCopyBundle').addEventListener('click', async ()=>{
+    const box = $('bundleBox'); if(!box) return;
+    try {
+      await navigator.clipboard.writeText(box.value);
+      alert('Copied debug bundle to clipboard');
+    } catch(err){
+      box.select();
+      document.execCommand('copy');
+      alert('Copied (fallback)');
+    }
   });
 
   // --- Init ---
@@ -241,6 +349,7 @@
   renderState();
   renderReq();
   renderRes();
+  updateBundle();
 </script>
 </body>
 </html>

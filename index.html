@@ -381,6 +381,33 @@
     }
 
     // Ensure session -> get site -> show PIN
+
+    // Lookup helper: fetch items by scanned IDs with string-cast + REST fallback
+    async function fetchItemsByIds(siteId, codes){
+      // Normalise to unique trimmed strings
+      const ids = Array.from(new Set((codes||[]).map(c => String(c).trim())));
+      if (!ids.length) return [];
+
+      // 1) Try the JS client first
+      try{
+        const { data, error } = await sb
+          .from('items')
+          .select('item_id, item_name, room')
+          .eq('site_id', siteId)
+          .in('item_id', ids);
+        if (!error && Array.isArray(data) && data.length) return data;
+      }catch(e){ /* swallow and try fallback */ }
+
+      // 2) Fallback to REST (mirrors working curl)
+      const inList = `(${ids.join(',')})`;
+      const url = `${SUPABASE_URL}/rest/v1/items?select=item_id,item_name,room&site_id=eq.${siteId}&item_id=in.${inList}`;
+      try{
+        const res = await fetch(url, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } });
+        const rows = await res.json();
+        if (Array.isArray(rows)) return rows;
+      }catch(e){ /* ignore */ }
+      return [];
+    }
     async function init() {
       const { data: { session } } = await sb.auth.getSession();
       if (!session) { show('screen-login'); $('status').textContent = 'Not signed in'; return; }
@@ -497,18 +524,15 @@
       tb.innerHTML = '';
       if (!codes.length) return;
 
-      // Batch fetch ONLY the scanned items for this site
-      const { data: rows, error } = await sb
-        .from('items')
-        .select('item_id, item_name, room')
-        .eq('site_id', S.siteId)
-        .in('item_id', codes);
+      // Use siteId (fallback to 1 if somehow not initialised yet)
+      const siteId = (S.siteId ?? 1);
+
+      // Fetch ONLY the scanned items for this site (with fallback)
+      const rows = await fetchItemsByIds(siteId, codes);
 
       // Build a quick lookup map (string keys)
       const byId = new Map();
-      if (!error && rows) {
-        for (const r of rows) byId.set(String(r.item_id).trim(), r);
-      }
+      for (const r of (rows||[])) byId.set(String(r.item_id).trim(), r);
 
       const types = S.types && S.types.length ? S.types : ['Working'];
 
