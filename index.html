@@ -36,6 +36,14 @@
     input[type=text], input[type=password], select { background:#0f1216; border:1px solid var(--line); color:var(--text); border-radius:10px; padding:10px 12px; width:100%; }
     table { width:100%; border-collapse: collapse; margin-top:10px; }
     th, td { border-bottom:1px solid var(--line); padding:10px; text-align:left; }
+
+    /* Review screen polish */
+    .review-intro { margin-top:6px; }
+    table.review-table thead th { font-weight:600; letter-spacing:.2px; color:var(--muted); background: #121419; }
+    table.review-table tbody tr:hover { background:#111317; }
+    table.review-table { border:1px solid var(--line); border-radius:12px; overflow:hidden; display:block; }
+    table.review-table thead, table.review-table tbody, table.review-table tr { display:table; width:100%; table-layout:fixed; }
+    table.review-table thead { position:sticky; top:0; z-index:1; }
     .topbar { position:fixed; left:0; right:0; top:0; padding:10px 16px; display:flex; justify-content:space-between; align-items:center; background:linear-gradient(to bottom, rgba(0,0,0,.5), transparent); }
     .pill { padding:6px 10px; background:#1e232b; border:1px solid var(--line); border-radius:999px; font-size:12px; }
     .toast { position:fixed; left:50%; transform:translateX(-50%); bottom:28px; background:#0f1216; border:1px solid var(--line); padding:10px 14px; border-radius:10px; color:#fff; }
@@ -311,7 +319,7 @@
           </div>
         </div>
         <div class="audit-bottom">
-          <img src="ScanTrolly.png" alt="Scan items during your round" class="scan-bottom">
+          <img id="imgScanTrolly" src="ScanTrolly2.png" alt="Scan items during your round" class="scan-bottom">
         </div>
       </div>
     </div>
@@ -319,17 +327,16 @@
 
   <div class="wrap hidden" id="screen-review">
     <div class="panel center" style="width:min(820px, 96vw)">
-<h2>Review & Submit</h2>
-<div class="hr"></div>
-<div id="reviewInfo" class="pill" style="margin:8px 0; display:inline-block;">Loading context…</div>
-<div class="hr"></div>
-<table id="reviewTable"><thead><tr><th>Name</th><th>Room</th><th>Check Type</th></tr></thead><tbody></tbody></table>
-<div class="pad">
-  <label for="comment" class="muted">Comments (optional)</label>
-  <textarea id="comment" placeholder="Any notes" rows="4" style="width:100%; background:#0f1216; border:1px solid var(--line); color:var(--text); border-radius:10px; padding:10px 12px;"></textarea>
-</div>
-<div class="pad"><button class="btn primary" id="btnSubmit">Submit</button></div>
-<p id="submitMsg" class="muted"></p>
+      <h2 class="glow">Review & Submit</h2>
+      <p class="muted review-intro">Confirm the items below, choose a check type if needed, then submit.</p>
+      <div class="hr"></div>
+      <table id="reviewTable" class="review-table"><thead><tr><th>Name</th><th>Room</th><th>Check Type</th></tr></thead><tbody></tbody></table>
+      <div class="hr"></div>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" id="btnBackToUpload">Back</button>
+        <button class="btn primary" id="btnSubmit">Submit</button>
+      </div>
+      <p id="submitMsg" class="muted"></p>
     </div>
   </div>
 
@@ -378,6 +385,7 @@
     let currentScreen = 'screen-login';
     function setTopbarFor(id){
       if (id === 'screen-begin') startDoubleDeepCycle(); else stopDoubleDeepCycle();
+      if (id === 'screen-scanning') startScanTrollyCycle(); else stopScanTrollyCycle();
       currentScreen = id;
       const btn = $('btnLogout');
       if (!btn) return;
@@ -398,16 +406,6 @@
       setTopbarFor(id);
     }
     function toast(msg) { const t=$('toast'); t.textContent=msg; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'), 1600); }
-    // Update the banner with who/where and basic counts
-    async function updateReviewInfo(scanned, matched){
-      try{
-        const { data } = await sb.auth.getUser();
-        const email = data?.user?.email || '(not signed in)';
-        const site = S.siteId == null ? '—' : String(S.siteId);
-        const el = document.getElementById('reviewInfo');
-        if (el){ el.textContent = `User: ${email}  •  Site: ${site}  •  Scanned: ${scanned}  •  Matched: ${matched}`; }
-      }catch(e){ const el = document.getElementById('reviewInfo'); if (el) el.textContent = 'Context unavailable'; }
-    }
     // Disable Submit when no check types are available
     function guardSubmitForTypes(){
       const b = document.getElementById('btnSubmit');
@@ -471,6 +469,7 @@
     let resetInterval = null;
     let doubleDeepTimer = null;
     let uploadFocusTimer = null;
+    let scanTrollyTimer = null;
     function startUploadFocusLoop(){
       if (uploadFocusTimer) clearInterval(uploadFocusTimer);
       // initial focus
@@ -524,6 +523,22 @@ function stopDoubleDeepCycle(){
   if (doubleDeepTimer) { clearInterval(doubleDeepTimer); doubleDeepTimer = null; }
   const img = $('imgDoubleDeep');
   if (img) img.src = 'DoubleDeep.png';
+}
+function startScanTrollyCycle(){
+  const img = $('imgScanTrolly');
+  if (!img) return;
+  stopScanTrollyCycle(); // ensure only one timer
+  let alt = false;
+  scanTrollyTimer = setInterval(()=>{
+    alt = !alt;
+    img.src = alt ? 'ScanTrolly2.png' : 'ScanTrolly.png';
+  }, 1000);
+}
+
+function stopScanTrollyCycle(){
+  if (scanTrollyTimer) { clearInterval(scanTrollyTimer); scanTrollyTimer = null; }
+  const img = $('imgScanTrolly');
+  if (img) img.src = 'ScanTrolly.png';
 }
     // Helper to reset upload screen UI state
     function resetUploadUI(){
@@ -669,6 +684,12 @@ function stopDoubleDeepCycle(){
     // Finish -> upload
     $('uploadInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); const raw=e.target.value.trim(); e.target.value=''; const m=raw.match(/^\d{10}$/); if(!m){ scheduleUploadAutoContinue(); return; } const code=m[0]; if(!S.scans.includes(code)){ const wasEmpty = S.scans.length === 0; S.scans.push(code); if (wasEmpty) { showUploadCounter(); } updateUploadCounter(); } scheduleUploadAutoContinue(); }});
     $('btnResetDone').addEventListener('click', () => { if (resetInterval) { clearInterval(resetInterval); resetInterval = null; } show('screen-pin'); });
+
+    $('btnBackToUpload').addEventListener('click', ()=>{
+      show('screen-upload');
+      showUploadQR();
+      focusUploadInput();
+    });
 
     async function refreshReview() {
       // Normalise scanned codes (strings, trimmed, unique)
