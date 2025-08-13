@@ -72,12 +72,6 @@
       <span class="pill">Supabase: <span id="sbStatus" class="ok">not tested</span></span>
       <span class="pill">Last lookup: <span id="lastMs">–</span> ms</span>
       <button class="btn primary" id="btnLookup">Run lookup now</button>
-      <label class="pill">Mode
-         <select id="modeSel">
-           <option value="anon" selected>anon</option>
-           <option value="auth">auth</option>
-         </select>
-       </label>
     </div>
 
     <div class="hr"></div>
@@ -95,15 +89,6 @@
     <h3>Supabase Response (raw)</h3>
     <div id="resBox" class="codebox mono"></div>
 
-    <div class="hr"></div>
-    <h3>Authentication</h3>
-    <div class="row" style="margin:6px 0 10px">
-      <span class="pill">Auth: <span id="authStatus">signed out</span></span>
-      <input id="authEmail" type="email" placeholder="email" style="width:200px"> 
-      <input id="authPass" type="password" placeholder="password" style="width:160px">
-      <button class="btn" id="btnSignIn">Sign in</button>
-      <button class="btn" id="btnSignOut">Sign out</button>
-    </div>
     <div class="hr"></div>
 
     <h3>Match Results</h3>
@@ -129,8 +114,6 @@
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVudmVvcW5scW5vYnVmaHVibHl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwMTcyNzYsImV4cCI6MjA3MDU5MzI3Nn0.g93OsXDpO3V9DToU7s-Z3SwBBnB84rBv0JMv-idgSME";
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); // CDN global per docs. 
   // (Docs: createClient via CDN; filters like .eq() / .in()).
-  const sbAuth = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
-  let authSession = null; // cached session for auth mode
 
   // --- State ---
   const S = {
@@ -139,7 +122,6 @@
     lastReq: null,
     lastRes: null,
     lastMs: null,
-    mode: 'anon',
   };
 
   // --- Helpers ---
@@ -155,26 +137,11 @@
       siteId: Number($('siteId').value || 1),
       scansRaw: S.scansRaw.slice(-20),   // show last 20 lines
       uniqueCodes: Array.from(S.codes),
-      autoLookup: $('autoLookup').checked,
-      mode: S.mode,
-      authSignedIn: !!authSession
+      autoLookup: $('autoLookup').checked
     });
   };
   const renderReq = ()=>{ $('reqBox').textContent = pretty(S.lastReq || '(no request yet)'); };
   const renderRes = ()=>{ $('resBox').textContent = pretty(S.lastRes || '(no response yet)'); };
-
-  async function updateAuthStatus(){
-    try{
-      const { data } = await sbAuth.auth.getSession();
-      authSession = data?.session || null;
-      const email = authSession?.user?.email || null;
-      const el = document.getElementById('authStatus');
-      if (el) el.textContent = email ? ('signed in as ' + email) : 'signed out';
-    }catch(e){
-      const el = document.getElementById('authStatus');
-      if (el) el.textContent = 'error';
-    }
-  }
 
   function renderMatches(rows){
     const tb = $('matchBody');
@@ -221,8 +188,6 @@
         anonKeyPresent: !!SUPABASE_ANON_KEY,
         siteId,
         qrUploadValue: '^&032&^',
-        mode: S.mode,
-        authEmail: authSession && authSession.user ? authSession.user.email : null,
       },
       state: {
         capturedCount: S.scansRaw.length,
@@ -278,12 +243,11 @@
     const t0 = performance.now();
     let data = null, error = null;
     try{
-      const client = (S.mode === 'auth') ? sbAuth : sb;
-      const resp = await client
+      const resp = await sb
         .from('items')
         .select('item_id, item_name, room')
         .eq('site_id', siteId)
-        .in('item_id', codes);
+        .in('item_id', codes); // use typed strings directly
       data = resp.data; error = resp.error || null;
     }catch(e){
       error = e;
@@ -310,7 +274,7 @@
         const res = await fetch(rawUrl, {
           headers: {
             apikey: SUPABASE_ANON_KEY,
-            Authorization: 'Bearer ' + (S.mode === 'auth' && authSession ? authSession.access_token : SUPABASE_ANON_KEY)
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
           }
         });
         const altRows = await res.json();
@@ -377,22 +341,6 @@
       alert('Copied (fallback)');
     }
   });
-  document.getElementById('modeSel').addEventListener('change', (e)=>{ S.mode = e.target.value; renderState(); updateBundle(); });
-  document.getElementById('btnSignIn').addEventListener('click', async ()=>{
-    const email = document.getElementById('authEmail').value.trim();
-    const password = document.getElementById('authPass').value;
-    try{
-      const { data, error } = await sbAuth.auth.signInWithPassword({ email, password });
-      if (error) { alert('Sign-in error: ' + error.message); return; }
-      await updateAuthStatus();
-      renderState(); updateBundle();
-    }catch(e){ alert('Sign-in failed: ' + e); }
-  });
-  document.getElementById('btnSignOut').addEventListener('click', async ()=>{
-    try{ await sbAuth.auth.signOut(); }catch(_){ }
-    await updateAuthStatus();
-    renderState(); updateBundle();
-  });
 
   // --- Init ---
   renderQRUpload();
@@ -402,7 +350,6 @@
   renderReq();
   renderRes();
   updateBundle();
-  updateAuthStatus();
 </script>
 </body>
 </html>
