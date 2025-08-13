@@ -66,6 +66,27 @@
     table.review-table { border:1px solid var(--line); border-radius:12px; overflow:hidden; display:block; }
     table.review-table thead, table.review-table tbody, table.review-table tr { display:table; width:100%; table-layout:fixed; }
     table.review-table thead { position:sticky; top:0; z-index:1; }
+
+    /* --- Review screen layout: fill viewport on iPad portrait --- */
+    #screen-review .panel {
+      width: min(820px, 96vw);
+      display: flex;
+      flex-direction: column;
+      min-height: calc(100vh - 120px); /* account for topbar + padding */
+    }
+    #screen-review h2.glow {
+      color: var(--accent);
+      text-shadow: 0 0 10px rgba(34,197,94,.6), 0 0 18px rgba(34,197,94,.35);
+    }
+    /* Table stretches to fill available space; body scrolls */
+    #screen-review #reviewTable { flex: 1; display: block; }
+    #screen-review #reviewTable tbody { display: block; overflow: auto; max-height: 100%; }
+    #screen-review #reviewTable thead, 
+    #screen-review #reviewTable tr { width: 100%; table-layout: fixed; display: table; }
+    /* Actions row sticks to bottom via flex */
+    #screen-review .review-actions { margin-top: auto; justify-content: flex-end; }
+    /* Compact icon button for remove (matches app buttons but smaller) */
+    .btn.icon { padding: 6px 10px; min-width: 36px; height: 36px; font-size: 20px; line-height: 1; border-radius: 10px; }
     .topbar { position:fixed; left:0; right:0; top:0; padding:10px 16px; display:flex; justify-content:space-between; align-items:center; background:linear-gradient(to bottom, rgba(0,0,0,.5), transparent); }
     .pill { padding:6px 10px; background:#1e232b; border:1px solid var(--line); border-radius:999px; font-size:12px; }
     .toast { position:fixed; left:50%; transform:translateX(-50%); bottom:28px; background:#0f1216; border:1px solid var(--line); padding:10px 14px; border-radius:10px; color:#fff; }
@@ -350,11 +371,9 @@
   <div class="wrap hidden" id="screen-review">
     <div class="panel center" style="width:min(820px, 96vw)">
       <h2 class="glow">Review & Submit</h2>
-      <p class="muted review-intro">Confirm the items below, choose a check type if needed, then submit.</p>
+      <table id="reviewTable" class="review-table"><thead><tr><th>Name</th><th>Room</th><th>Check Type</th><th></th></tr></thead><tbody></tbody></table>
       <div class="hr"></div>
-      <table id="reviewTable" class="review-table"><thead><tr><th>Name</th><th>Room</th><th>Check Type</th></tr></thead><tbody></tbody></table>
-      <div class="hr"></div>
-      <div class="row" style="justify-content:flex-end">
+      <div class="row review-actions">
         <button class="btn" id="btnBackToUpload">Back</button>
         <button class="btn primary" id="btnSubmit">Submit</button>
       </div>
@@ -797,7 +816,27 @@ function stopScanTrollyCycle(){
         else if (types.length) sel.value = types[0];
         tdType.appendChild(sel);
 
-        tr.appendChild(tdName); tr.appendChild(tdRoom); tr.appendChild(tdType);
+        // Remove column/button
+        const tdRemove = document.createElement('td');
+        const btnRemove = document.createElement('button');
+        btnRemove.className = 'btn danger icon';
+        btnRemove.type = 'button';
+        btnRemove.textContent = '×';
+        btnRemove.setAttribute('aria-label', 'Remove this item');
+        btnRemove.addEventListener('click', ()=>{
+          // Remove this scanned code from state
+          S.scans = S.scans.filter(c => c !== code);
+          // Remove the row from the table
+          tr.remove();
+          // If no items remain, disable submit and show a hint
+          const submitBtn = document.getElementById('btnSubmit');
+          const msg = document.getElementById('submitMsg');
+          if (submitBtn) submitBtn.disabled = (S.scans.length === 0);
+          if (S.scans.length === 0 && msg) msg.textContent = 'No items to submit.';
+        });
+        tdRemove.appendChild(btnRemove);
+
+        tr.appendChild(tdName); tr.appendChild(tdRoom); tr.appendChild(tdType); tr.appendChild(tdRemove);
         tb.appendChild(tr);
       }
     }
