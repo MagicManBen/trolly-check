@@ -313,7 +313,7 @@
     function readClient(){ return sb; }
 
     // State
-    const S = { siteId: null, user: null, staff: null, scans: [], itemsById: new Map(), types: [] };
+    const S = { siteId: null, user: null, staff: null, scans: [], itemsById: new Map(), types: [], typesByCategory: {} };
 
     // Helpers
     function $(id) { return document.getElementById(id); }
@@ -347,7 +347,8 @@
       const b = document.getElementById('btnSubmit');
       const m = document.getElementById('submitMsg');
       if (!b) return;
-      const ok = Array.isArray(S.types) && S.types.length > 0;
+      // At least one category has types
+      const ok = S.typesByCategory && Object.values(S.typesByCategory).some(arr => Array.isArray(arr) && arr.length > 0);
       b.disabled = !ok;
       if (!ok && m) m.textContent = 'No check types available for this site. Please contact an admin.';
       else if (m) m.textContent = '';
@@ -442,7 +443,7 @@
       try{
         const { data, error } = await readClient()
           .from('items')
-          .select('item_id, item_name, room, default_check_type')
+          .select('item_id, item_name, room, default_check_type, category')
           .eq('site_id', siteId)
           .in('item_id', ids);
         if (!error && Array.isArray(data) && data.length) return data;
@@ -466,10 +467,17 @@
 
     // Preload items and types for fast lookup
     async function preloadCache() {
-      const i = await readClient().from('items').select('item_id, item_name, room, default_check_type').eq('site_id', S.siteId).order('item_name');
+      const i = await readClient().from('items').select('item_id, item_name, room, default_check_type, category').eq('site_id', S.siteId).order('item_name');
       if (!i.error) { S.itemsById.clear(); (i.data||[]).forEach(r=>S.itemsById.set(r.item_id, r)); }
-      const t = await readClient().from('check_types').select('name').eq('site_id', S.siteId).order('name');
-      if (!t.error) { S.types = (t.data||[]).map(r=>r.name); }
+      // Get check_types with category, and group by category
+      const t = await readClient().from('check_types').select('name, category').eq('site_id', S.siteId).order('name');
+      if (!t.error) {
+        S.typesByCategory = {};
+        (t.data || []).forEach(r => {
+          if (!S.typesByCategory[r.category]) S.typesByCategory[r.category] = [];
+          S.typesByCategory[r.category].push(r.name);
+        });
+      }
       guardSubmitForTypes();
     }
 
@@ -583,12 +591,15 @@
       const byId = new Map();
       for (const r of (rows||[])) byId.set(String(r.item_id).trim(), r);
 
-      const types = S.types && S.types.length ? S.types : ['Working'];
       guardSubmitForTypes();
 
       // Render rows in the same order as scanned
       for (const code of codes) {
         const it = byId.get(code);
+        // Determine types for this item's category
+        const category = it?.category || 'general';
+        const types = S.typesByCategory?.[category] || S.typesByCategory?.general || [];
+
         const tr = document.createElement('tr');
 
         const tdName = document.createElement('td');
