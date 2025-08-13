@@ -46,6 +46,36 @@
     .art img { max-width: 360px; width: 90%; height: auto; border-radius: 12px; border:1px solid var(--line); background:#0f1216; }
     .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: center; }
     @media (max-width: 720px) { .twocol { grid-template-columns: 1fr; } }
+
+    /* --- Upload screen enhancements --- */
+    #screen-upload h2 {
+      font-size: clamp(1.6rem, 4vw, 2.2rem);
+      animation: pulseTitle 2s ease-in-out infinite;
+    }
+    @keyframes pulseTitle {
+      0%,100% { text-shadow: 0 0 8px rgba(34,197,94,.6); color: var(--accent); }
+      50% { text-shadow: 0 0 18px rgba(34,197,94,.9); color: #b8f5b8; }
+    }
+    #qrUploadWrap {
+      position: relative;
+      padding: 14px;
+      border-radius: 16px;
+      background: var(--card);
+      box-shadow: 0 0 16px rgba(34,197,94,.3), inset 0 0 18px rgba(34,197,94,.15);
+      animation: glowQR 2.4s ease-in-out infinite;
+    }
+    @keyframes glowQR {
+      0%, 100% { box-shadow: 0 0 16px rgba(34,197,94,.3), inset 0 0 18px rgba(34,197,94,.15); transform: scale(1); }
+      50% { box-shadow: 0 0 28px rgba(34,197,94,.5), inset 0 0 26px rgba(34,197,94,.25); transform: scale(1.03); }
+    }
+    #screen-upload .muted {
+      font-size: 1.05rem;
+      animation: fadeHint 3.2s ease-in-out infinite;
+    }
+    @keyframes fadeHint {
+      0%,100% { opacity: 0.8; }
+      50% { opacity: 1; }
+    }
     .glow { text-shadow: 0 2px 0 rgba(0,0,0,.6), 0 0 18px rgba(255,255,255,.35); }
     .btn.light { background:#ffffff; border-color:#d1d5db; color:#111; font-weight:600; box-shadow: 0 8px 24px rgba(0,0,0,.25), 0 0 0 0 rgba(34,197,94,.0); }
     .btn.light:active { transform: translateY(1px); }
@@ -263,7 +293,7 @@
     <div class="panel center">
       <h2 class="glow">Press the circle button on the scanner once and wait for 2 beeps</h2>
       <p class="muted">After 2 beeps, click the BEGIN button below</p>
-      <div class="art"><img src="DoubleDeep.png" alt="Press the handheld once"></div>
+      <div class="art"><img id="imgDoubleDeep" src="DoubleDeep.png" alt="Press the handheld once"></div>
       <div class="pad"><button class="btn light" id="btnBegin">Begin</button></div>
     </div>
   </div>
@@ -349,12 +379,14 @@
     function $(id) { return document.getElementById(id); }
     let currentScreen = 'screen-login';
     function setTopbarFor(id){
+    if (id === 'screen-begin') startDoubleDeepCycle(); else stopDoubleDeepCycle();
       currentScreen = id;
       const btn = $('btnLogout');
       if (!btn) return;
       const auditing = (id !== 'screen-login');
       btn.textContent = auditing ? 'Exit Audit' : 'Logout';
     }
+
     function show(id) {
       ['screen-login','screen-pin','screen-begin','screen-scanning','screen-upload','screen-review','screen-reset']
         .forEach(x => $(x).classList.add('hidden'));
@@ -433,6 +465,7 @@
     }
     let uploadQuietTimer = null;
     let resetInterval = null;
+    let doubleDeepTimer = null;
     function startResetCountdown(seconds = 30) {
       if (resetInterval) { clearInterval(resetInterval); resetInterval = null; }
       const el = $('resetCountdown');
@@ -452,6 +485,21 @@
     }
     function focusUploadInput(){ const u=$('uploadInput'); if(!u) return; u.value=''; u.focus(); }
     function scheduleUploadAutoContinue(){ if(uploadQuietTimer) clearTimeout(uploadQuietTimer); uploadQuietTimer = setTimeout(async ()=>{ await refreshReview(); show('screen-review'); }, 2000); }
+    function startDoubleDeepCycle(){
+  const img = $('imgDoubleDeep');
+  if (!img) return;
+  stopDoubleDeepCycle(); // ensure only one timer
+  let alt = false;
+  doubleDeepTimer = setInterval(()=>{
+    alt = !alt;
+    img.src = alt ? 'DoubleDeep2.png' : 'DoubleDeep.png';
+  }, 1000);
+}
+function stopDoubleDeepCycle(){
+  if (doubleDeepTimer) { clearInterval(doubleDeepTimer); doubleDeepTimer = null; }
+  const img = $('imgDoubleDeep');
+  if (img) img.src = 'DoubleDeep.png';
+}
     // Helper to reset upload screen UI state
     function resetUploadUI(){
       if(uploadQuietTimer) { clearTimeout(uploadQuietTimer); uploadQuietTimer=null; }
