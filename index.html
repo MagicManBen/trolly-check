@@ -51,11 +51,12 @@
     /* --- Audit in progress hero --- */
     .audit-hero{
       position:relative;
-      min-height:100vh;
+      height:100vh;
       width:100%;
-      display:flex;
+      display:grid;
+      grid-template-rows: 1fr 1fr; /* top half ring + text, bottom half images */
       align-items:center;
-      justify-content:center;
+      justify-items:center;
       overflow:hidden;
       padding-top:40px;
     }
@@ -71,6 +72,21 @@
       text-align:center;
       width:100%;
       max-width:780px;
+    }
+    .audit-top{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      width:100%;
+      height:100%;
+    }
+    .audit-bottom{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      width:100%;
+      height:100%;
+      padding: 8px 0 24px;
     }
     .audit-ring{
       position:relative;
@@ -127,16 +143,13 @@
       100%{ box-shadow:0 0 0 24px rgba(30,140,30,0); opacity:0 }
     }
     .scan-bottom{
-      position:fixed;
-      bottom:70px;
-      left:50%;
-      transform:translateX(-50%);
-      max-width:min(60vw, 360px);
+      display:block;
+      max-width:min(70vw, 420px);
       width:90%;
       height:auto;
-      z-index:50;
-      opacity:.95;
-      pointer-events:none;
+      opacity:1;
+      pointer-events:auto;
+      margin:0 auto;
     }
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
@@ -198,15 +211,19 @@
   <div class="wrap hidden" id="screen-scanning">
     <div class="panel center" style="background:transparent; box-shadow:none; width:100%; padding:0;">
       <div class="audit-hero">
-        <div class="audit-center">
-          <div class="audit-ring" aria-hidden="true">
-            <div class="audit-title">
-              <div class="big">Audit in progress</div>
-              <div class="sub">Scan the QR on each item as you check it.<br>When finished, return to this iPad.</div>
+        <div class="audit-top">
+          <div class="audit-center">
+            <div class="audit-ring" aria-hidden="true">
+              <div class="audit-title">
+                <div class="big">Audit in progress</div>
+                <div class="sub">Scan the QR on each item as you check it.<br>When finished, return to this iPad.</div>
+              </div>
             </div>
           </div>
         </div>
-        <img src="ScanTrolly.png" alt="Scan items during your round" class="scan-bottom">
+        <div class="audit-bottom">
+          <img src="ScanTrolly.png" alt="Scan items during your round" class="scan-bottom">
+        </div>
       </div>
     </div>
   </div>
