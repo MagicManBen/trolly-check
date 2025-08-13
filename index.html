@@ -175,6 +175,13 @@
       pointer-events:auto;
       margin:0 auto;
     }
+    /* --- Final reset emphasis (bigger text, same QR size) --- */
+    #screen-reset h2 { font-size: clamp(2rem, 6vw, 2.6rem); }
+    #screen-reset #resetInstruction { font-size: clamp(1.2rem, 4vw, 1.6rem); }
+    #screen-reset #resetCountdown { font-size: clamp(1.1rem, 3.6vw, 1.4rem); }
+    #screen-reset #btnResetDone { font-size: 1.15rem; padding: 14px 22px; }
+    /* Keep QR at library default (220px) */
+    #screen-reset #qrReset canvas, #screen-reset #qrReset img { width: 220px !important; height: 220px !important; }
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -285,10 +292,10 @@
 
   <div class="wrap hidden" id="screen-reset">
     <div class="panel center">
-      <h2>Final reset</h2>
-      <p class="muted">After submitting, clear the handheld memory.</p>
-      <div class="art"><div id="qrReset"></div></div>
-      <p class="muted mono">Value: ^&030&^</p>
+      <h2 class="glow">Final reset</h2>
+      <p class="muted" id="resetInstruction">Scan this QR to finish.</p>
+      <div class="art"><div id="qrReset" aria-label="Final reset QR code"></div></div>
+      <p class="muted" id="resetCountdown"></p>
       <div class="pad"><button class="btn primary" id="btnResetDone">Done</button></div>
     </div>
   </div>
@@ -394,6 +401,24 @@
       const n = $('uploadCount'); if(n) n.textContent = String(S.scans.length);
     }
     let uploadQuietTimer = null;
+    let resetInterval = null;
+    function startResetCountdown(seconds = 30) {
+      if (resetInterval) { clearInterval(resetInterval); resetInterval = null; }
+      const el = $('resetCountdown');
+      let t = seconds;
+      const tick = () => {
+        if (el) el.textContent = `Auto return in ${t}s`;
+        if (t <= 0) {
+          clearInterval(resetInterval);
+          resetInterval = null;
+          show('screen-pin');
+          return;
+        }
+        t -= 1;
+      };
+      tick();
+      resetInterval = setInterval(tick, 1000);
+    }
     function focusUploadInput(){ const u=$('uploadInput'); if(!u) return; u.value=''; u.focus(); }
     function scheduleUploadAutoContinue(){ if(uploadQuietTimer) clearTimeout(uploadQuietTimer); uploadQuietTimer = setTimeout(async ()=>{ await refreshReview(); show('screen-review'); }, 2000); }
     // Helper to reset upload screen UI state
@@ -474,6 +499,7 @@
         const sl = $('scanList'); if (sl) sl.innerHTML = '';
         const sc = $('scanCount'); if (sc) sc.textContent = '0';
         const cm = $('comment'); if (cm) cm.value = '';
+        if (resetInterval) { clearInterval(resetInterval); resetInterval = null; }
         show('screen-pin');
         return;
       }
@@ -531,7 +557,7 @@
 
     // Finish -> upload
     $('uploadInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); const raw=e.target.value.trim(); e.target.value=''; const m=raw.match(/^\d{10}$/); if(!m){ scheduleUploadAutoContinue(); return; } const code=m[0]; if(!S.scans.includes(code)){ const wasEmpty = S.scans.length === 0; S.scans.push(code); if (wasEmpty) { showUploadCounter(); } updateUploadCounter(); } scheduleUploadAutoContinue(); }});
-    $('btnResetDone').addEventListener('click', ()=>{ show('screen-pin'); });
+    $('btnResetDone').addEventListener('click', () => { if (resetInterval) { clearInterval(resetInterval); resetInterval = null; } show('screen-pin'); });
 
     async function refreshReview() {
       // Normalise scanned codes (strings, trimmed, unique)
@@ -614,6 +640,7 @@
       $('comment').value='';
       show('screen-reset');
       showResetQR();
+      startResetCountdown(30);
     });
 
 
