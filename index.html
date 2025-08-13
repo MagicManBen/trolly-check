@@ -300,12 +300,8 @@
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVudmVvcW5scW5vYnVmaHVibHl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwMTcyNzYsImV4cCI6MjA3MDU5MzI3Nn0.g93OsXDpO3V9DToU7s-Z3SwBBnB84rBv0JMv-idgSME";
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // Debug mode: use anon read-only client when ?debug=1 is present
-    const DEBUG = new URLSearchParams(location.search).has('debug');
-    const sbPublic = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false }
-    });
-    function readClient(){ return DEBUG ? sbPublic : sb; }
+    // Production: always use authenticated client for reads
+    function readClient(){ return sb; }
 
     // State
     const S = { siteId: null, user: null, staff: null, scans: [], itemsById: new Map(), types: [] };
