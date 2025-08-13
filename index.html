@@ -298,17 +298,6 @@
   <div id="toast" class="toast hidden"></div>
 
   <script>
-    // Debug output helper
-    function setDebugOutput(obj){
-      const box = document.getElementById('debugBox');
-      if (box){
-        try{
-          box.textContent = JSON.stringify(obj, null, 2);
-        }catch(e){
-          box.textContent = String(obj);
-        }
-      }
-    }
     const SUPABASE_URL = "https://unveoqnlqnobufhublyw.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVudmVvcW5scW5vYnVmaHVibHl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwMTcyNzYsImV4cCI6MjA3MDU5MzI3Nn0.g93OsXDpO3V9DToU7s-Z3SwBBnB84rBv0JMv-idgSME";
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -344,7 +333,6 @@
         const site = S.siteId == null ? '—' : String(S.siteId);
         const el = document.getElementById('reviewInfo');
         if (el){ el.textContent = `User: ${email}  •  Site: ${site}  •  Scanned: ${scanned}  •  Matched: ${matched}`; }
-        console.debug('[Review]', { email, siteId: S.siteId, scanned, matched });
       }catch(e){ const el = document.getElementById('reviewInfo'); if (el) el.textContent = 'Context unavailable'; }
     }
     // Disable Submit when no check types are available
@@ -595,38 +583,6 @@
         tr.appendChild(tdName); tr.appendChild(tdRoom); tr.appendChild(tdType);
         tb.appendChild(tr);
       }
-      // --- DEBUG OUTPUT ---
-      // Assemble debug info object
-      const debugInfoObject = {
-        meta: {
-          screen: currentScreen,
-          siteId: S.siteId,
-          staff: S.staff,
-          user: S.user
-        },
-        supabase: {
-          scans: S.scans,
-          types: S.types,
-          itemsById_count: S.itemsById.size
-        },
-        state: {
-          codes,
-        },
-        request: {
-          siteId,
-          codes
-        },
-        response: {
-          rows
-        },
-        timing: {
-          refreshed: new Date().toISOString()
-        },
-        matches: {
-          matched_count: rows ? rows.length : 0
-        }
-      };
-      setDebugOutput(debugInfoObject);
     }
 
     // Submit
@@ -663,8 +619,5 @@
 
     init();
 </script>
-  <div id="debugBox" style="position:fixed;bottom:0;left:0;width:100%;max-height:200px;overflow:auto;background:#111;color:#0f0;font-family:monospace;font-size:12px;padding:4px;white-space:pre-wrap;z-index:9999;">
-    DEBUG OUTPUT WILL APPEAR HERE
-  </div>
 </body>
 </html>
