@@ -63,7 +63,13 @@
     .review-intro { margin-top:6px; }
     table.review-table thead th { font-weight:600; letter-spacing:.2px; color:var(--muted); background: #121419; }
     table.review-table tbody tr:hover { background:#111317; }
-    table.review-table { border:1px solid var(--line); border-radius:12px; overflow:hidden; display:block; }
+    table.review-table {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      display: block;
+      background: var(--card); /* match app card style */
+    }
     table.review-table thead, table.review-table tbody, table.review-table tr { display:table; width:100%; table-layout:fixed; }
     table.review-table thead { position:sticky; top:0; z-index:1; }
 
@@ -72,19 +78,39 @@
       width: min(820px, 96vw);
       display: flex;
       flex-direction: column;
-      min-height: calc(100vh - 120px); /* account for topbar + padding */
+      /* Fill almost full viewport height, accounting for topbar + outer padding */
+      min-height: calc(100vh - 72px);
     }
     #screen-review h2.glow {
+      /* Neon green (no animation) to match app accent */
       color: var(--accent);
-      text-shadow: 0 0 10px rgba(34,197,94,.6), 0 0 18px rgba(34,197,94,.35);
+      text-shadow: 0 0 12px rgba(34,197,94,.8), 0 0 24px rgba(34,197,94,.45);
     }
     /* Table stretches to fill available space; body scrolls */
-    #screen-review #reviewTable { flex: 1; display: block; }
-    #screen-review #reviewTable tbody { display: block; overflow: auto; max-height: 100%; }
-    #screen-review #reviewTable thead, 
-    #screen-review #reviewTable tr { width: 100%; table-layout: fixed; display: table; }
+    #screen-review #reviewTable {
+      flex: 1 1 auto;
+      display: block;
+      height: 100%;
+      min-height: 0; /* allow flex child to shrink properly on iPad Safari */
+      background: var(--card);
+    }
+    #screen-review #reviewTable tbody {
+      display: block;
+      overflow: auto;
+      height: 100%;
+      min-height: 100%; /* ensure the table area fills even with few rows */
+    }
+    #screen-review #reviewTable thead,
+    #screen-review #reviewTable tr {
+      width: 100%;
+      table-layout: fixed;
+      display: table;
+    }
     /* Actions row sticks to bottom via flex */
-    #screen-review .review-actions { margin-top: auto; justify-content: flex-end; }
+    #screen-review .review-actions {
+      margin-top: auto;
+      justify-content: flex-end;
+    }
     /* Compact icon button for remove (matches app buttons but smaller) */
     .btn.icon { padding: 6px 10px; min-width: 36px; height: 36px; font-size: 20px; line-height: 1; border-radius: 10px; }
     .topbar { position:fixed; left:0; right:0; top:0; padding:10px 16px; display:flex; justify-content:space-between; align-items:center; background:linear-gradient(to bottom, rgba(0,0,0,.5), transparent); }
