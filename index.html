@@ -488,34 +488,33 @@
     $('btnResetDone').addEventListener('click', ()=>{ show('screen-pin'); });
 
     async function refreshReview() {
-      await preloadCache();
+      // Normalise scanned codes (strings, trimmed, unique)
+      const codes = Array.from(new Set((S.scans || []).map(c => String(c).trim())));
+
+      // Short-circuit if nothing scanned
       const tb = $('reviewTable')?.querySelector('tbody');
       if (!tb) return;
       tb.innerHTML = '';
+      if (!codes.length) return;
+
+      // Batch fetch ONLY the scanned items for this site
+      const { data: rows, error } = await sb
+        .from('items')
+        .select('item_id, item_name, room')
+        .eq('site_id', S.siteId)
+        .in('item_id', codes);
+
+      // Build a quick lookup map (string keys)
+      const byId = new Map();
+      if (!error && rows) {
+        for (const r of rows) byId.set(String(r.item_id).trim(), r);
+      }
+
       const types = S.types && S.types.length ? S.types : ['Working'];
 
-      for (const rawCode of S.scans) {
-        const code = String(rawCode).trim();
-        let it = S.itemsById.get(code);
-
-        // Fallback: if not in cache, try to fetch this single item
-        if (!it) {
-          try {
-            const { data: miss, error: missErr } = await sb
-              .from('items')
-              .select('item_id, item_name, room')
-              .eq('site_id', S.siteId)
-              .eq('item_id', code)
-              .maybeSingle();
-            if (!missErr && miss) {
-              S.itemsById.set(miss.item_id, miss);
-              it = miss;
-            }
-          } catch (e) {
-            console.warn('Lookup failed for', code, e);
-          }
-        }
-
+      // Render rows in the same order as scanned
+      for (const code of codes) {
+        const it = byId.get(code);
         const tr = document.createElement('tr');
 
         const tdName = document.createElement('td');
@@ -529,16 +528,11 @@
         sel.className = 'rowType';
         sel.setAttribute('data-item-id', code);
         for (const n of types) {
-          const o = document.createElement('option');
-          o.value = n;
-          o.textContent = n;
-          sel.appendChild(o);
+          const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o);
         }
         tdType.appendChild(sel);
 
-        tr.appendChild(tdName);
-        tr.appendChild(tdRoom);
-        tr.appendChild(tdType);
+        tr.appendChild(tdName); tr.appendChild(tdRoom); tr.appendChild(tdType);
         tb.appendChild(tr);
       }
     }
