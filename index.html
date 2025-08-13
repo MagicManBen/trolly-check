@@ -490,24 +490,56 @@
     async function refreshReview() {
       await preloadCache();
       const tb = $('reviewTable')?.querySelector('tbody');
-      if (tb) {
-        tb.innerHTML = '';
-        const types = S.types && S.types.length ? S.types : ['Working'];
-        for (const code of S.scans) {
-          const it = S.itemsById.get(code);
-          const tr = document.createElement('tr');
+      if (!tb) return;
+      tb.innerHTML = '';
+      const types = S.types && S.types.length ? S.types : ['Working'];
 
-          const tdName = document.createElement('td'); tdName.textContent = it ? it.item_name : '(Unknown)';
-          const tdRoom = document.createElement('td'); tdRoom.textContent = it ? it.room : '—';
+      for (const rawCode of S.scans) {
+        const code = String(rawCode).trim();
+        let it = S.itemsById.get(code);
 
-          const tdType = document.createElement('td');
-          const sel = document.createElement('select'); sel.className = 'rowType'; sel.setAttribute('data-item-id', code);
-          for (const n of types) { const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); }
-          tdType.appendChild(sel);
-
-          tr.appendChild(tdName); tr.appendChild(tdRoom); tr.appendChild(tdType);
-          tb.appendChild(tr);
+        // Fallback: if not in cache, try to fetch this single item
+        if (!it) {
+          try {
+            const { data: miss, error: missErr } = await sb
+              .from('items')
+              .select('item_id, item_name, room')
+              .eq('site_id', S.siteId)
+              .eq('item_id', code)
+              .maybeSingle();
+            if (!missErr && miss) {
+              S.itemsById.set(miss.item_id, miss);
+              it = miss;
+            }
+          } catch (e) {
+            console.warn('Lookup failed for', code, e);
+          }
         }
+
+        const tr = document.createElement('tr');
+
+        const tdName = document.createElement('td');
+        tdName.textContent = it ? it.item_name : '(Unknown)';
+
+        const tdRoom = document.createElement('td');
+        tdRoom.textContent = it ? (it.room || '—') : '—';
+
+        const tdType = document.createElement('td');
+        const sel = document.createElement('select');
+        sel.className = 'rowType';
+        sel.setAttribute('data-item-id', code);
+        for (const n of types) {
+          const o = document.createElement('option');
+          o.value = n;
+          o.textContent = n;
+          sel.appendChild(o);
+        }
+        tdType.appendChild(sel);
+
+        tr.appendChild(tdName);
+        tr.appendChild(tdRoom);
+        tr.appendChild(tdType);
+        tb.appendChild(tr);
       }
     }
 
