@@ -73,6 +73,51 @@
     table.review-table thead, table.review-table tbody, table.review-table tr { display:table; width:100%; table-layout:fixed; }
     table.review-table thead { position:sticky; top:0; z-index:1; }
 
+    /* --- Taller, easier-to-tap dropdown on Review screen --- */
+    select.rowType{
+      min-height: 48px;
+      padding: 10px 12px;
+      font-size: 16px;
+      border-radius: 12px;
+      line-height: 1.2;
+    }
+    select.rowType:focus{
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(34,197,94,.35), 0 0 12px rgba(34,197,94,.25);
+      border-color: var(--accent);
+    }
+
+    /* --- Grouping by Room (Review table) --- */
+    tr.group-row td{
+      padding: 10px 14px;
+      background: linear-gradient(to right, rgba(34,197,94,.12), rgba(34,197,94,0));
+      border-bottom: 1px solid var(--line);
+      position: sticky; /* sticks at top of the scrollable tbody */
+      top: 0;          /* relative to the tbody scroll container */
+      z-index: 0;      /* under the table header which has z-index:1 */
+    }
+    .group-head{
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+    }
+    .group-head .left{
+      display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:.2px;
+    }
+    .group-head .room-dot{
+      width:10px; height:10px; border-radius:50%; background: var(--accent);
+      box-shadow: 0 0 10px var(--accent), 0 0 22px rgba(34,197,94,.5);
+    }
+    .group-head .room-name{ font-weight:700; }
+    .group-head .room-count{
+      font-size:12px; color:var(--muted); padding:2px 8px; border:1px solid var(--line);
+      border-radius:9999px;
+    }
+
+    tr.group-item td{ border-left: 3px solid rgba(34,197,94,.35); }
+    tr.group-item:hover td{ background:#111317; }
+
+    /* Dim repeated room cells inside groups */
+    td.room-cell{ color: var(--muted); font-size: 13px; }
+
     /* --- Review screen layout: fill viewport on iPad portrait --- */
     #screen-review .panel {
       width: min(820px, 96vw);
@@ -802,7 +847,7 @@ function stopScanTrollyCycle(){
       const siteId = S.siteId;
       if (siteId == null) { toast('No site configured. Please sign out and sign in again.'); return; }
 
-      // Fetch ONLY the scanned items for this site (with fallback)
+      // Fetch ONLY the scanned items for this site
       const rows = await fetchItemsByIds(siteId, codes);
       if (!rows || rows.length === 0) {
         toast('No matching items found for this site. Check scanned codes or permissions.');
@@ -814,56 +859,85 @@ function stopScanTrollyCycle(){
 
       guardSubmitForTypes();
 
-      // Render rows in the same order as scanned
+      // --- Group by Room, preserving scan order ---
+      const groups = new Map(); // room -> array of { code, it }
       for (const code of codes) {
         const it = byId.get(code);
-        // Determine types for this item's category
-        const category = it?.category || 'general';
-        const types = S.typesByCategory?.[category] || S.typesByCategory?.general || [];
+        const roomRaw = it ? (it.room || '') : '';
+        const room = roomRaw && roomRaw.trim() ? roomRaw.trim() : 'Unassigned room';
+        if (!groups.has(room)) groups.set(room, []);
+        groups.get(room).push({ code, it });
+      }
 
-        const tr = document.createElement('tr');
+      // Render groups
+      for (const [room, list] of groups) {
+        // Group header row (sticky within tbody)
+        const ghtr = document.createElement('tr');
+        ghtr.className = 'group-row';
+        const ghtd = document.createElement('td');
+        ghtd.colSpan = 4;
+        ghtd.innerHTML = `
+          <div class="group-head">
+            <div class="left">
+              <span class="room-dot" aria-hidden="true"></span>
+              <span class="room-name">${room}</span>
+            </div>
+            <span class="room-count">${list.length} item${list.length>1?'s':''}</span>
+          </div>`;
+        ghtr.appendChild(ghtd);
+        tb.appendChild(ghtr);
 
-        const tdName = document.createElement('td');
-        tdName.textContent = it ? it.item_name : '(Unknown)';
+        // Group items
+        for (const { code, it } of list) {
+          const tr = document.createElement('tr');
+          tr.className = 'group-item';
 
-        const tdRoom = document.createElement('td');
-        tdRoom.textContent = it ? (it.room || '—') : '—';
+          const tdName = document.createElement('td');
+          tdName.textContent = it ? it.item_name : '(Unknown)';
 
-        const tdType = document.createElement('td');
-        const sel = document.createElement('select');
-        sel.className = 'rowType';
-        sel.setAttribute('data-item-id', code);
-        for (const n of types) {
-          const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o);
+          const tdRoom = document.createElement('td');
+          tdRoom.className = 'room-cell';
+          tdRoom.textContent = room; // keeps grouping obvious while dimmed
+
+          const tdType = document.createElement('td');
+          const sel = document.createElement('select');
+          sel.className = 'rowType';
+          sel.setAttribute('data-item-id', code);
+
+          // Determine types for this item's category
+          const category = it?.category || 'general';
+          const types = S.typesByCategory?.[category] || S.typesByCategory?.general || [];
+          for (const n of types) {
+            const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o);
+          }
+          // Prefer per-item default if present and valid; otherwise fall back to first type
+          const def = it && it.default_check_type;
+          if (def && types.includes(def)) sel.value = def; else if (types.length) sel.value = types[0];
+          tdType.appendChild(sel);
+
+          // Remove column/button
+          const tdRemove = document.createElement('td');
+          const btnRemove = document.createElement('button');
+          btnRemove.className = 'btn danger icon';
+          btnRemove.type = 'button';
+          btnRemove.textContent = '×';
+          btnRemove.setAttribute('aria-label', 'Remove this item');
+          btnRemove.addEventListener('click', ()=>{
+            // Remove this scanned code from state
+            S.scans = S.scans.filter(c => c !== code);
+            // Remove the row from the table
+            tr.remove();
+            // If no items remain, disable submit and show a hint
+            const submitBtn = document.getElementById('btnSubmit');
+            const msg = document.getElementById('submitMsg');
+            if (submitBtn) submitBtn.disabled = (S.scans.length === 0);
+            if (S.scans.length === 0 && msg) msg.textContent = 'No items to submit.';
+          });
+          tdRemove.appendChild(btnRemove);
+
+          tr.appendChild(tdName); tr.appendChild(tdRoom); tr.appendChild(tdType); tr.appendChild(tdRemove);
+          tb.appendChild(tr);
         }
-        // Prefer per-item default if present and valid; otherwise fall back to first type
-        const def = it && it.default_check_type;
-        if (def && types.includes(def)) sel.value = def;
-        else if (types.length) sel.value = types[0];
-        tdType.appendChild(sel);
-
-        // Remove column/button
-        const tdRemove = document.createElement('td');
-        const btnRemove = document.createElement('button');
-        btnRemove.className = 'btn danger icon';
-        btnRemove.type = 'button';
-        btnRemove.textContent = '×';
-        btnRemove.setAttribute('aria-label', 'Remove this item');
-        btnRemove.addEventListener('click', ()=>{
-          // Remove this scanned code from state
-          S.scans = S.scans.filter(c => c !== code);
-          // Remove the row from the table
-          tr.remove();
-          // If no items remain, disable submit and show a hint
-          const submitBtn = document.getElementById('btnSubmit');
-          const msg = document.getElementById('submitMsg');
-          if (submitBtn) submitBtn.disabled = (S.scans.length === 0);
-          if (S.scans.length === 0 && msg) msg.textContent = 'No items to submit.';
-        });
-        tdRemove.appendChild(btnRemove);
-
-        tr.appendChild(tdName); tr.appendChild(tdRoom); tr.appendChild(tdType); tr.appendChild(tdRemove);
-        tb.appendChild(tr);
       }
     }
 
