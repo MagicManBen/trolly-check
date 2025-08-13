@@ -382,7 +382,7 @@
 
     // Ensure session -> get site -> show PIN
 
-    // Lookup helper: fetch items by scanned IDs with robust multi-try fallback
+    // Lookup helper: fetch items by scanned IDs using Supabase client only (no REST fallback)
     async function fetchItemsByIds(siteId, codes){
       // Normalise to unique trimmed strings
       const ids = Array.from(new Set((codes||[]).map(c => String(c).trim())));
@@ -420,22 +420,6 @@
           .eq('site_id', siteId)
           .filter('item_id', 'in', inListQuotes);
         if (!error && Array.isArray(data) && data.length) return data;
-      }catch(_){}
-
-      // --- 4) Direct REST fallback (no quotes) ---
-      try{
-        const url = `${SUPABASE_URL}/rest/v1/items?select=item_id,item_name,room&site_id=eq.${siteId}&item_id=in.${encodeURI(inListNoQuotes)}`;
-        const res = await fetch(url, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } });
-        const rows = await res.json();
-        if (Array.isArray(rows) && rows.length) return rows;
-      }catch(_){}
-
-      // --- 5) Direct REST fallback (with quotes) ---
-      try{
-        const url = `${SUPABASE_URL}/rest/v1/items?select=item_id,item_name,room&site_id=eq.${siteId}&item_id=in.${encodeURI(inListQuotes)}`;
-        const res = await fetch(url, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } });
-        const rows = await res.json();
-        if (Array.isArray(rows)) return rows; // may be empty, return as-is
       }catch(_){}
 
       return [];
