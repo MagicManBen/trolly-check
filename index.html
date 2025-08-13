@@ -106,8 +106,6 @@
     }
     .fab { position: fixed; right: 22px; bottom: 22px; width:56px; height:56px; border-radius:50%; background: var(--accent); border: none; color:#04130a; font-size:28px; display:flex; justify-content:center; align-items:center; box-shadow: 0 10px 26px rgba(34,197,94,.40); }
     .footer { position: fixed; bottom: 10px; left:0; right:0; text-align:center; color: var(--muted); }
-    /* Hide Exit Audit / Logout button */
-    #btnLogout { display:none !important; }
     /* --- Audit in progress hero --- */
     .audit-hero{
       position:relative;
@@ -337,8 +335,8 @@
 
   <div class="wrap hidden" id="screen-upload">
     <div class="panel center">
-      <h2>Upload from scanner</h2>
-      <p class="muted">Scan this QR on the handheld to upload stored scans.</p>
+      <h2>When you have finished...</h2>
+      <p class="muted">Scan this QR code.</p>
       <div class="twocol">
         <div class="art"><img src="IPADSCAN.png" alt="Use the iPad to upload from handheld" id="imgIpadScan"></div>
         <div>
@@ -379,12 +377,18 @@
     function $(id) { return document.getElementById(id); }
     let currentScreen = 'screen-login';
     function setTopbarFor(id){
-    if (id === 'screen-begin') startDoubleDeepCycle(); else stopDoubleDeepCycle();
+      if (id === 'screen-begin') startDoubleDeepCycle(); else stopDoubleDeepCycle();
       currentScreen = id;
       const btn = $('btnLogout');
       if (!btn) return;
-      const auditing = (id !== 'screen-login');
-      btn.textContent = auditing ? 'Exit Audit' : 'Logout';
+
+      // Show Exit Audit only on these screens: begin, scanning, upload, review
+      const showExit = (id === 'screen-begin' || id === 'screen-scanning' || id === 'screen-upload' || id === 'screen-review');
+      btn.style.display = showExit ? 'inline-flex' : 'none';
+      btn.textContent = showExit ? 'Exit Audit' : 'Logout';
+
+      // Manage persistent focus for the hidden upload input
+      if (id === 'screen-upload') { startUploadFocusLoop(); } else { stopUploadFocusLoop(); }
     }
 
     function show(id) {
@@ -466,6 +470,27 @@
     let uploadQuietTimer = null;
     let resetInterval = null;
     let doubleDeepTimer = null;
+    let uploadFocusTimer = null;
+    function startUploadFocusLoop(){
+      if (uploadFocusTimer) clearInterval(uploadFocusTimer);
+      // initial focus
+      focusUploadInput();
+      // keep refocusing periodically while on the upload screen
+      uploadFocusTimer = setInterval(()=>{
+        if (currentScreen !== 'screen-upload') { clearInterval(uploadFocusTimer); uploadFocusTimer = null; return; }
+        const el = $('uploadInput');
+        if (el && document.activeElement !== el) { el.focus(); }
+      }, 1000);
+    }
+    function stopUploadFocusLoop(){
+      if (uploadFocusTimer) { clearInterval(uploadFocusTimer); uploadFocusTimer = null; }
+    }
+    // Also refocus if the tab/app regains visibility while on the upload screen
+    document.addEventListener('visibilitychange', ()=>{
+      if (document.visibilityState === 'visible' && currentScreen === 'screen-upload') {
+        focusUploadInput();
+      }
+    });
     function startResetCountdown(seconds = 30) {
       if (resetInterval) { clearInterval(resetInterval); resetInterval = null; }
       const el = $('resetCountdown');
