@@ -1,0 +1,727 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>CQC Admin — Sites, Rooms, Items, Staff</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <style>
+    :root{
+      --bg:#0e0f11; --panel:#181a1e; --muted:#9aa0a6; --text:#e8eaed; --accent:#22c55e; --danger:#ef4444;
+      --card:#111317; --line:#272a30; --btn:#2a2f36; --warn:#f59e0b;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,system-ui,Segoe UI,Roboto,Arial,sans-serif}
+    .app{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+    .sidebar{background:var(--panel);border-right:1px solid var(--line);padding:16px;position:sticky;top:0;height:100vh}
+    .brand{font-weight:800;font-size:18px;margin-bottom:12px}
+    .status{font-size:12px;color:var(--muted);margin-bottom:16px}
+    .nav button{width:100%;text-align:left;background:transparent;border:1px solid var(--line);color:var(--text);padding:10px 12px;border-radius:10px;margin-bottom:8px;cursor:pointer}
+    .nav button.active{background:var(--accent);border-color:transparent;color:#04130a;font-weight:700}
+    .main{padding:18px 18px 80px}
+    .row{display:flex;gap:10px;align-items:center}
+    .grid{display:grid;gap:12px}
+    .grid.cols-2{grid-template-columns:1fr 1fr}
+    .grid.cols-3{grid-template-columns:1fr 1fr 1fr}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+    .card h3{margin:0 0 10px 0}
+    .muted{color:var(--muted)}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--btn);border:1px solid var(--line);color:var(--text);padding:10px 12px;border-radius:10px;cursor:pointer}
+    .btn.primary{background:var(--accent);border-color:transparent;color:#04130a;font-weight:700}
+    .btn.warn{background:var(--warn);border-color:transparent;color:#111}
+    .btn.danger{background:var(--danger);border-color:transparent}
+    .btn.small{padding:6px 8px;border-radius:8px;font-size:12px}
+    input, select, textarea{background:#0f1216;border:1px solid var(--line);color:var(--text);border-radius:10px;padding:10px 12px;width:100%}
+    textarea{min-height:70px;resize:vertical}
+    table{width:100%;border-collapse:collapse}
+    th, td{padding:10px;border-bottom:1px solid var(--line);text-align:left;font-size:14px}
+    th{color:var(--muted);background:#121419;position:sticky;top:0}
+    .tools{display:flex;gap:8px;flex-wrap:wrap}
+    .topbar{position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center;padding:10px 0 14px 0;background:linear-gradient(to bottom, rgba(0,0,0,.3), transparent)}
+    .pill{padding:6px 10px;border:1px solid var(--line);border-radius:999px;background:#1e232b;font-size:12px}
+    .right{display:flex;gap:8px;align-items:center}
+    .hidden{display:none !important}
+    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:#0f1216;border:1px solid var(--line);padding:10px 14px;border-radius:10px}
+    .danger-text{color:var(--danger)}
+    .success-text{color:var(--accent)}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+    .hr{border-top:1px solid var(--line);margin:12px 0}
+    .table-wrap{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card);max-height:60vh;overflow:auto}
+    .tag{padding:2px 8px;border:1px solid var(--line);border-radius:999px;font-size:12px;background:#1e232b}
+    .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    .kpi > div{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+    .kpi .big{font-size:24px;font-weight:800}
+    .right input[type="text"]{width:220px}
+    .danger-row{background:rgba(239,68,68,.08)}
+    .ok-row{background:rgba(34,197,94,.08)}
+  </style>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">CQC Admin</div>
+      <div class="status">
+        <div id="who">Not signed in</div>
+        <div id="site" class="muted">—</div>
+      </div>
+      <div class="nav">
+        <button data-tab="tab-dashboard" class="active">Dashboard</button>
+        <button data-tab="tab-rooms">Rooms</button>
+        <button data-tab="tab-types">Check Types</button>
+        <button data-tab="tab-items">Items</button>
+        <button data-tab="tab-staff">Staff</button>
+        <button data-tab="tab-audits">Audit Log</button>
+        <div class="hr"></div>
+        <button id="btnLogout">Logout</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <!-- LOGIN PANEL -->
+      <div id="panel-login" class="card">
+        <h3>Sign in</h3>
+        <div class="grid cols-3">
+          <div><input id="loginEmail" type="text" placeholder="email@example.com"></div>
+          <div><input id="loginPass" type="password" placeholder="Password"></div>
+          <div><button class="btn primary" id="doLogin">Sign in</button></div>
+        </div>
+        <div id="loginMsg" class="muted" style="margin-top:8px"></div>
+      </div>
+
+      <!-- MAIN APP PANEL -->
+      <div id="panel-app" class="hidden">
+        <div class="topbar">
+          <div class="pill">Admin</div>
+          <div class="right">
+            <input id="globalSearch" type="text" placeholder="Global search…">
+            <button class="btn" id="btnRefresh">Refresh</button>
+          </div>
+        </div>
+
+        <!-- DASHBOARD -->
+        <section id="tab-dashboard">
+          <div class="kpi">
+            <div><div class="muted">Rooms</div><div id="kpiRooms" class="big">—</div></div>
+            <div><div class="muted">Check Types</div><div id="kpiTypes" class="big">—</div></div>
+            <div><div class="muted">Items</div><div id="kpiItems" class="big">—</div></div>
+            <div><div class="muted">Staff</div><div id="kpiStaff" class="big">—</div></div>
+          </div>
+          <div class="hr"></div>
+          <div class="grid cols-2">
+            <div class="card">
+              <h3>Quick add room</h3>
+              <div class="row">
+                <input id="qaRoomName" type="text" placeholder="Room name (e.g., Reception)">
+                <button class="btn primary" id="qaAddRoom">Add</button>
+              </div>
+              <div class="muted" style="margin-top:6px">Rooms are per-site and must be unique by name.</div>
+            </div>
+            <div class="card">
+              <h3>Quick add staff</h3>
+              <div class="grid cols-3">
+                <input id="qaStaffName" type="text" placeholder="Full name">
+                <select id="qaStaffRole">
+                  <option value="staff">staff</option>
+                  <option value="admin">admin</option>
+                </select>
+                <button class="btn primary" id="qaAddStaff">Add</button>
+              </div>
+              <div class="muted" style="margin-top:6px">You can set a PIN after creating a staff member.</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ROOMS -->
+        <section id="tab-rooms" class="hidden">
+          <div class="card">
+            <h3>Add room</h3>
+            <div class="row">
+              <input id="roomName" type="text" placeholder="Room name">
+              <button class="btn primary" id="addRoom">Add</button>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Rooms</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Name</th><th>Actions</th></tr></thead>
+                <tbody id="roomsBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- CHECK TYPES -->
+        <section id="tab-types" class="hidden">
+          <div class="card">
+            <h3>Add check type</h3>
+            <div class="grid cols-3">
+              <input id="typeName" type="text" placeholder="Name (e.g., Date Check)">
+              <select id="typeCategory">
+                <option value="general">general</option>
+                <option value="trolley">trolley</option>
+                <option value="fridge">fridge</option>
+                <option value="room">room</option>
+                <option value="fire_safety">fire_safety</option>
+              </select>
+              <button class="btn primary" id="addType">Add</button>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Check types</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Name</th><th>Category</th><th>Active</th><th>Actions</th></tr></thead>
+                <tbody id="typesBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ITEMS -->
+        <section id="tab-items" class="hidden">
+          <div class="card">
+            <h3>Add / Update item</h3>
+            <div class="grid cols-3">
+              <input id="itemCode" type="text" placeholder="Item ID (scan code)">
+              <input id="itemName" type="text" placeholder="Item name">
+              <select id="itemCategory">
+                <option value="general">general</option>
+                <option value="trolley">trolley</option>
+                <option value="fridge">fridge</option>
+                <option value="room">room</option>
+                <option value="fire_safety">fire_safety</option>
+              </select>
+              <select id="itemRoom"></select>
+              <select id="itemType"></select>
+              <input id="itemComments" type="text" placeholder="Comments (optional)">
+            </div>
+            <div class="row" style="margin-top:10px">
+              <button class="btn primary" id="saveItem">Save item</button>
+              <span class="muted">Saving uses RPC <span class="mono">admin_upsert_item</span> and auto-creates Room/Type if missing.</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Bulk import CSV</h3>
+            <div class="tools">
+              <input id="csvFile" type="file" accept=".csv">
+              <button class="btn" id="importCsv">Import</button>
+              <button class="btn warn" id="downloadTemplate">Download template</button>
+            </div>
+            <div class="muted" style="margin-top:6px">Columns: item_id,item_name,room_name,category,default_check_type,comments</div>
+            <div id="csvMsg" class="muted" style="margin-top:6px"></div>
+          </div>
+
+          <div class="card">
+            <div class="row" style="justify-content:space-between">
+              <h3>Items</h3>
+              <div class="row">
+                <input id="itemSearch" type="text" placeholder="Search items…">
+                <button class="btn" id="refreshItems">Refresh</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Code</th><th>Name</th><th>Room</th><th>Category</th><th>Default Type</th><th>Active</th><th></th></tr></thead>
+                <tbody id="itemsBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- STAFF -->
+        <section id="tab-staff" class="hidden">
+          <div class="card">
+            <h3>Add staff</h3>
+            <div class="grid cols-3">
+              <input id="staffName" type="text" placeholder="Full name">
+              <select id="staffRole">
+                <option value="staff">staff</option>
+                <option value="admin">admin</option>
+              </select>
+              <button class="btn primary" id="addStaff">Add</button>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Staff</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Name</th><th>Role</th><th>PIN</th><th>Actions</th></tr></thead>
+                <tbody id="staffBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- AUDITS -->
+        <section id="tab-audits" class="hidden">
+          <div class="card">
+            <h3>Audit log</h3>
+            <div class="tools" style="margin-bottom:8px">
+              <input id="auditSearch" type="text" placeholder="Search (name, item, code, type)">
+              <button class="btn" id="refreshAudits">Refresh</button>
+              <button class="btn" id="exportAudits">Export CSV</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>When</th><th>Staff</th><th>Code</th><th>Item</th><th>Room</th><th>Type</th><th>Value</th>
+                  </tr>
+                </thead>
+                <tbody id="auditsBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script>
+    // ====== CONFIG ======
+    const SUPABASE_URL = "https://unveoqnlqnobufhublyw.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVudmVvcW5scW5vYnVmaHVibHl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwMTcyNzYsImV4cCI6MjA3MDU5MzI3Nn0.g93OsXDpO3V9DToU7s-Z3SwBBnB84rBv0JMv-idgSME";
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ====== STATE ======
+    const S = {
+      user: null, profile: null, siteId: null,
+      rooms: [], types: [], typesByCat: {}, items: [], staff: [], audits: []
+    };
+
+    // ====== HELPERS ======
+    function $(id){ return document.getElementById(id); }
+    function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),1600); }
+    function fmtDate(s){ try{ return new Date(s).toLocaleString(); }catch(_){ return s; } }
+    function setActiveTab(id){
+      document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active', b.dataset.tab===id));
+      document.querySelectorAll('section[id^="tab-"]').forEach(s=>s.classList.add('hidden'));
+      $(id)?.classList.remove('hidden');
+    }
+    function updateKPIs(){
+      $('kpiRooms').textContent = S.rooms.length;
+      $('kpiTypes').textContent = S.types.length;
+      $('kpiItems').textContent = S.items.length;
+      $('kpiStaff').textContent = S.staff.length;
+    }
+    function buildTypesByCat(){
+      S.typesByCat = {};
+      for (const t of S.types.filter(x=>x.active !== false)){
+        if (!S.typesByCat[t.category]) S.typesByCat[t.category] = [];
+        S.typesByCat[t.category].push(t);
+      }
+      for(const k in S.typesByCat){ S.typesByCat[k].sort((a,b)=>a.name.localeCompare(b.name)); }
+    }
+    function fillItemPickers(){
+      // Rooms
+      const rSel = $('itemRoom'); rSel.innerHTML = '';
+      const rOpt = (id, name)=>{ const o=document.createElement('option'); o.value=name; o.textContent=name; rSel.appendChild(o); };
+      const sortedRooms = [...S.rooms].sort((a,b)=>a.name.localeCompare(b.name));
+      if(sortedRooms.length===0){ rOpt('', '(no rooms yet)'); } else { sortedRooms.forEach(r=>rOpt(r.id, r.name)); }
+      // Types (by selected category)
+      const cat = $('itemCategory').value || 'general';
+      const tSel = $('itemType'); tSel.innerHTML = '';
+      const types = S.typesByCat[cat] || S.typesByCat['general'] || [];
+      if(types.length===0){
+        const o=document.createElement('option'); o.value=''; o.textContent='(no types for '+cat+')'; tSel.appendChild(o);
+      }else{
+        for(const t of types){ const o=document.createElement('option'); o.value=t.name; o.textContent=t.name; tSel.appendChild(o); }
+      }
+    }
+    function filterTextMatch(hay, needle){
+      const n = (needle||'').trim().toLowerCase();
+      if(!n) return true;
+      return (hay||'').toString().toLowerCase().includes(n);
+    }
+    function download(filename, text){
+      const a=document.createElement('a'); a.href='data:text/plain;charset=utf-8,'+encodeURIComponent(text); a.download=filename; a.click();
+    }
+
+    // ====== INIT & AUTH ======
+    async function init(){
+      const { data:{ session } } = await sb.auth.getSession();
+      if(!session){ $('panel-login').classList.remove('hidden'); $('panel-app').classList.add('hidden'); return; }
+      S.user = session.user;
+      $('who').textContent = S.user.email || 'Signed in';
+      // Get profile -> site
+      const { data: prof, error } = await sb.from('profiles').select('site_id, full_name, role').eq('user_id', S.user.id).limit(1);
+      if(error || !prof || !prof.length){ $('site').textContent='No profile/site'; toast(error?.message||'No profile'); return; }
+      S.profile = prof[0]; S.siteId = S.profile.site_id;
+      $('site').textContent = `Site ${S.siteId}`;
+      $('panel-login').classList.add('hidden');
+      $('panel-app').classList.remove('hidden');
+      await refreshAll();
+    }
+
+    async function refreshAll(){
+      await Promise.all([loadRooms(), loadTypes(), loadItems(), loadStaff(), loadAudits()]);
+      buildTypesByCat();
+      fillItemPickers();
+      renderRooms(); renderTypes(); renderItems(); renderStaff(); renderAudits();
+      updateKPIs();
+    }
+
+    // ====== LOADERS ======
+    async function loadRooms(){
+      const { data, error } = await sb.from('rooms').select('id,name').eq('site_id', S.siteId).order('name');
+      if(!error) S.rooms = data||[]; else toast(error.message);
+    }
+    async function loadTypes(){
+      const { data, error } = await sb.from('check_types').select('id,name,category,active').eq('site_id', S.siteId).order('name');
+      if(!error) S.types = data||[]; else toast(error.message);
+    }
+    async function loadItems(){
+      const { data, error } = await sb.from('v_items_admin')
+        .select('id,site_id,item_id,item_name,category,active,room_id,room_name,default_check_type_id,default_check_type_name,comments')
+        .eq('site_id', S.siteId).order('item_name');
+      if(!error) S.items = data||[]; else toast(error.message);
+    }
+    async function loadStaff(){
+      const { data, error } = await sb.from('kiosk_users').select('id,full_name,role,pin_hash').eq('site_id', S.siteId).order('full_name');
+      if(!error) S.staff = data||[]; else toast(error.message);
+    }
+    async function loadAudits(){
+      const { data, error } = await sb.from('v_submission_detail')
+        .select('*').eq('site_id', S.siteId).order('submitted_at', { ascending:false }).limit(200);
+      if(!error) S.audits = data||[]; else toast(error.message);
+    }
+
+    // ====== RENDERERS ======
+    function renderRooms(){
+      const tb=$('roomsBody'); tb.innerHTML='';
+      for(const r of S.rooms){
+        const tr=document.createElement('tr');
+        tr.innerHTML = `
+          <td>${r.name}</td>
+          <td class="tools">
+            <button class="btn small" data-act="rename" data-id="${r.id}">Rename</button>
+            <button class="btn small danger" data-act="del" data-id="${r.id}">Delete</button>
+          </td>`;
+        tb.appendChild(tr);
+      }
+    }
+
+    function renderTypes(){
+      const tb=$('typesBody'); tb.innerHTML='';
+      for(const t of S.types){
+        const tr=document.createElement('tr');
+        tr.innerHTML = `
+          <td>${t.name}</td>
+          <td><span class="tag">${t.category}</span></td>
+          <td>${t.active===false?'<span class="danger-text">no</span>':'yes'}</td>
+          <td class="tools">
+            <button class="btn small" data-act="toggleType" data-id="${t.id}">${t.active===false?'Activate':'Deactivate'}</button>
+            <button class="btn small" data-act="renameType" data-id="${t.id}">Rename</button>
+            <button class="btn small danger" data-act="delType" data-id="${t.id}">Delete</button>
+          </td>`;
+        tb.appendChild(tr);
+      }
+    }
+
+    function renderItems(){
+      const q = $('itemSearch').value || $('globalSearch').value || '';
+      const tb=$('itemsBody'); tb.innerHTML='';
+      const rows = S.items.filter(r =>
+        filterTextMatch(r.item_id, q) || filterTextMatch(r.item_name, q) || filterTextMatch(r.room_name, q) || filterTextMatch(r.default_check_type_name, q)
+      );
+      for(const r of rows){
+        const tr=document.createElement('tr');
+        tr.innerHTML = `
+          <td class="mono">${r.item_id}</td>
+          <td>${r.item_name}</td>
+          <td>${r.room_name||'<span class="muted">(none)</span>'}</td>
+          <td><span class="tag">${r.category}</span></td>
+          <td>${r.default_check_type_name||'<span class="muted">(none)</span>'}</td>
+          <td>${r.active===false?'<span class="danger-text">no</span>':'yes'}</td>
+          <td class="tools">
+            <button class="btn small" data-act="editItem" data-code="${r.item_id}">Edit</button>
+            <button class="btn small" data-act="toggleItem" data-id="${r.id}">${r.active===false?'Activate':'Deactivate'}</button>
+            <button class="btn small danger" data-act="delItem" data-id="${r.id}">Delete</button>
+          </td>`;
+        tb.appendChild(tr);
+      }
+    }
+
+    function renderStaff(){
+      const tb=$('staffBody'); tb.innerHTML='';
+      for(const s of S.staff){
+        const tr=document.createElement('tr');
+        tr.innerHTML = `
+          <td>${s.full_name}</td>
+          <td>${s.role}</td>
+          <td>${s.pin_hash ? 'set' : '<span class="muted">not set</span>'}</td>
+          <td class="tools">
+            <button class="btn small" data-act="setPin" data-id="${s.id}">Set PIN</button>
+            <button class="btn small" data-act="renameStaff" data-id="${s.id}">Rename</button>
+            <button class="btn small" data-act="roleStaff" data-id="${s.id}">Change role</button>
+            <button class="btn small danger" data-act="delStaff" data-id="${s.id}">Delete</button>
+          </td>`;
+        tb.appendChild(tr);
+      }
+    }
+
+    function renderAudits(){
+      const q=$('auditSearch').value||'';
+      const tb=$('auditsBody'); tb.innerHTML='';
+      const rows = S.audits.filter(r =>
+        filterTextMatch(r.staff_name,q) || filterTextMatch(r.item_name,q) || filterTextMatch(r.scanned_code,q) || filterTextMatch(r.check_type,q)
+      );
+      for(const a of rows){
+        const tr=document.createElement('tr');
+        tr.innerHTML = `
+          <td>${fmtDate(a.submitted_at)}</td>
+          <td>${a.staff_name}</td>
+          <td class="mono">${a.scanned_code}</td>
+          <td>${a.item_name||''}</td>
+          <td>${a.room||''}</td>
+          <td>${a.check_type||''}</td>
+          <td>${a.check_value||''}</td>`;
+        tb.appendChild(tr);
+      }
+    }
+
+    // ====== ACTIONS ======
+    // Login
+    $('doLogin').addEventListener('click', async ()=>{
+      $('loginMsg').textContent = 'Signing in…';
+      const email=$('loginEmail').value.trim(), password=$('loginPass').value;
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if(error){ $('loginMsg').textContent = error.message; return; }
+      $('loginMsg').textContent='';
+      await init();
+    });
+    $('btnLogout').addEventListener('click', async ()=>{
+      await sb.auth.signOut(); location.reload();
+    });
+
+    // Navigation
+    document.querySelectorAll('.nav button[data-tab]').forEach(b=>b.addEventListener('click', ()=> setActiveTab(b.dataset.tab)));
+    $('btnRefresh').addEventListener('click', refreshAll);
+    $('globalSearch').addEventListener('input', ()=>{ renderItems(); renderAudits(); });
+
+    // Dashboard quick adds
+    $('qaAddRoom').addEventListener('click', async ()=>{
+      const name=$('qaRoomName').value.trim(); if(!name) return;
+      const { error } = await sb.from('rooms').insert({ site_id:S.siteId, name });
+      if(error) return toast(error.message);
+      $('qaRoomName').value=''; await loadRooms(); buildTypesByCat(); fillItemPickers(); renderRooms(); updateKPIs(); toast('Room added');
+    });
+    $('qaAddStaff').addEventListener('click', async ()=>{
+      const full_name=$('qaStaffName').value.trim(); const role=$('qaStaffRole').value;
+      if(!full_name) return;
+      const { error } = await sb.from('kiosk_users').insert({ site_id:S.siteId, full_name, role });
+      if(error) return toast(error.message);
+      $('qaStaffName').value=''; await loadStaff(); renderStaff(); updateKPIs(); toast('Staff added');
+    });
+
+    // Rooms tab
+    $('addRoom').addEventListener('click', async ()=>{
+      const name=$('roomName').value.trim(); if(!name) return;
+      const { error } = await sb.from('rooms').insert({ site_id:S.siteId, name });
+      if(error) return toast(error.message);
+      $('roomName').value=''; await loadRooms(); renderRooms(); fillItemPickers(); updateKPIs(); toast('Room added');
+    });
+    $('roomsBody').addEventListener('click', async (e)=>{
+      const btn=e.target.closest('button'); if(!btn) return;
+      const id=Number(btn.dataset.id); const act=btn.dataset.act;
+      if(act==='rename'){
+        const row=S.rooms.find(r=>r.id===id); const name=prompt('New room name', row?.name||''); if(!name) return;
+        const { error } = await sb.from('rooms').update({ name }).eq('id', id).eq('site_id', S.siteId);
+        if(error) return toast(error.message);
+        await loadRooms(); renderRooms(); fillItemPickers(); toast('Room renamed');
+      }
+      if(act==='del'){
+        if(!confirm('Delete this room?')) return;
+        const { error } = await sb.from('rooms').delete().eq('id', id).eq('site_id', S.siteId);
+        if(error) return toast(error.message);
+        await loadRooms(); renderRooms(); fillItemPickers(); toast('Room deleted');
+      }
+    });
+
+    // Types tab
+    $('addType').addEventListener('click', async ()=>{
+      const name=$('typeName').value.trim(); const category=$('typeCategory').value;
+      if(!name) return;
+      const { error } = await sb.from('check_types').insert({ site_id:S.siteId, name, category, active:true });
+      if(error) return toast(error.message);
+      $('typeName').value=''; await loadTypes(); buildTypesByCat(); renderTypes(); fillItemPickers(); updateKPIs(); toast('Type added');
+    });
+    $('typesBody').addEventListener('click', async (e)=>{
+      const b=e.target.closest('button'); if(!b) return;
+      const id=Number(b.dataset.id), act=b.dataset.act;
+      if(act==='toggleType'){
+        const t=S.types.find(x=>x.id===id); const active = !(t?.active===false);
+        const { error } = await sb.from('check_types').update({ active: !active }).eq('id', id).eq('site_id', S.siteId);
+        if(error) return toast(error.message);
+        await loadTypes(); buildTypesByCat(); renderTypes(); fillItemPickers(); toast('Type toggled');
+      }
+      if(act==='renameType'){
+        const t=S.types.find(x=>x.id===id); const name=prompt('New type name', t?.name||''); if(!name) return;
+        const { error } = await sb.from('check_types').update({ name }).eq('id', id).eq('site_id', S.siteId);
+        if(error) return toast(error.message);
+        await loadTypes(); buildTypesByCat(); renderTypes(); fillItemPickers(); toast('Type renamed');
+      }
+      if(act==='delType'){
+        if(!confirm('Delete this check type?')) return;
+        const { error } = await sb.from('check_types').delete().eq('id', id).eq('site_id', S.siteId);
+        if(error) return toast(error.message);
+        await loadTypes(); buildTypesByCat(); renderTypes(); fillItemPickers(); toast('Type deleted');
+      }
+    });
+
+    // Items tab
+    $('itemCategory').addEventListener('change', fillItemPickers);
+    $('saveItem').addEventListener('click', async ()=>{
+      const p = {
+        p_site_id: S.siteId,
+        p_item_id: $('itemCode').value.trim(),
+        p_item_name: $('itemName').value.trim(),
+        p_room_name: $('itemRoom').value, // passing name; RPC resolves/creates
+        p_category: $('itemCategory').value,
+        p_default_check_type_name: $('itemType').value,
+        p_comments: $('itemComments').value.trim() || null
+      };
+      if(!p.p_item_id || !p.p_item_name){ return toast('Code & name required'); }
+      const { data, error } = await sb.rpc('admin_upsert_item', p);
+      if(error) return toast(error.message);
+      await loadItems(); renderItems(); updateKPIs(); toast('Item saved');
+    });
+    $('itemSearch').addEventListener('input', renderItems);
+    $('refreshItems').addEventListener('click', async ()=>{ await loadItems(); renderItems(); });
+
+    $('itemsBody').addEventListener('click', async (e)=>{
+      const b=e.target.closest('button'); if(!b) return;
+      const act=b.dataset.act;
+      if(act==='editItem'){
+        const code=b.dataset.code;
+        const it=S.items.find(x=>x.item_id===code);
+        if(!it) return;
+        $('itemCode').value = it.item_id;
+        $('itemName').value = it.item_name||'';
+        $('itemCategory').value = it.category||'general';
+        fillItemPickers();
+        if(it.room_name){ $('itemRoom').value = it.room_name; }
+        if(it.default_check_type_name){ $('itemType').value = it.default_check_type_name; }
+        $('itemComments').value = it.comments||'';
+        setActiveTab('tab-items');
+        toast('Loaded into form');
+      }
+      if(act==='toggleItem'){
+        const id=Number(b.dataset.id);
+        const row = S.items.find(x=>x.id===id);
+        const active = !(row?.active===false);
+        const { error } = await sb.from('items').update({ active: !active }).eq('id', id).eq('site_id', S.siteId);
+        if(error) return toast(error.message);
+        await loadItems(); renderItems(); toast('Item toggled');
+      }
+      if(act==='delItem'){
+        const id=Number(b.dataset.id);
+        if(!confirm('Delete this item?')) return;
+        const { error } = await sb.from('items').delete().eq('id', id).eq('site_id', S.siteId);
+        if(error) return toast(error.message);
+        await loadItems(); renderItems(); updateKPIs(); toast('Item deleted');
+      }
+    });
+
+    // CSV import
+    $('downloadTemplate').addEventListener('click', ()=>{
+      const csv = "item_id,item_name,room_name,category,default_check_type,comments\n" +
+                  "3062025919,Emergency Trolley,Reception Back Office,trolley,Cleaning,\n";
+      download('items_template.csv', csv);
+    });
+    $('importCsv').addEventListener('click', ()=>{
+      const f=$('csvFile').files[0]; if(!f) return toast('Choose a CSV file first');
+      Papa.parse(f, {
+        header:true, skipEmptyLines:true, complete: async (res)=>{
+          const rows=res.data;
+          let ok=0, fail=0;
+          for(const r of rows){
+            const p = {
+              p_site_id: S.siteId,
+              p_item_id: (r.item_id||'').toString().trim(),
+              p_item_name: (r.item_name||'').toString().trim(),
+              p_room_name: (r.room_name||'').toString().trim(),
+              p_category: (r.category||'general').toString().trim(),
+              p_default_check_type_name: (r.default_check_type||'').toString().trim(),
+              p_comments: (r.comments||'').toString()
+            };
+            if(!p.p_item_id || !p.p_item_name){ fail++; continue; }
+            const { error } = await sb.rpc('admin_upsert_item', p);
+            if(error) { fail++; } else { ok++; }
+          }
+          $('csvMsg').textContent = `Imported ${ok} rows, ${fail} failed.`;
+          await loadItems(); renderItems(); updateKPIs();
+          toast('CSV import finished');
+        }
+      });
+    });
+
+    // Staff tab
+    $('addStaff').addEventListener('click', async ()=>{
+      const full_name=$('staffName').value.trim(); const role=$('staffRole').value;
+      if(!full_name) return;
+      const { error } = await sb.from('kiosk_users').insert({ site_id:S.siteId, full_name, role });
+      if(error) return toast(error.message);
+      $('staffName').value=''; await loadStaff(); renderStaff(); updateKPIs(); toast('Staff added');
+    });
+    $('staffBody').addEventListener('click', async (e)=>{
+      const b=e.target.closest('button'); if(!b) return;
+      const id=Number(b.dataset.id), act=b.dataset.act;
+      if(act==='setPin'){
+        const p = prompt('Enter new 4-digit PIN'); if(!p) return;
+        const { error } = await sb.rpc('set_kiosk_user_pin', { p_user_id:id, p_site_id:S.siteId, p_pin:p });
+        if(error) return toast(error.message);
+        await loadStaff(); renderStaff(); toast('PIN set');
+      }
+      if(act==='renameStaff'){
+        const row=S.staff.find(x=>x.id===id); const name=prompt('New name', row?.full_name||''); if(!name) return;
+        const { error } = await sb.from('kiosk_users').update({ full_name:name }).eq('id', id).eq('site_id', S.siteId);
+        if(error) return toast(error.message);
+        await loadStaff(); renderStaff(); toast('Renamed');
+      }
+      if(act==='roleStaff'){
+        const row=S.staff.find(x=>x.id===id); const role=prompt('Role (admin/staff)', row?.role||'staff'); if(!role) return;
+        const { error } = await sb.from('kiosk_users').update({ role }).eq('id', id).eq('site_id', S.siteId);
+        if(error) return toast(error.message);
+        await loadStaff(); renderStaff(); toast('Role updated');
+      }
+      if(act==='delStaff'){
+        if(!confirm('Delete this staff member?')) return;
+        const { error } = await sb.from('kiosk_users').delete().eq('id', id).eq('site_id', S.siteId);
+        if(error) return toast(error.message);
+        await loadStaff(); renderStaff(); updateKPIs(); toast('Staff deleted');
+      }
+    });
+
+    // Audits
+    $('refreshAudits').addEventListener('click', async ()=>{ await loadAudits(); renderAudits(); });
+    $('auditSearch').addEventListener('input', renderAudits);
+    $('exportAudits').addEventListener('click', ()=>{
+      const rows = S.audits.map(a=>({
+        submitted_at: a.submitted_at,
+        staff_name: a.staff_name,
+        scanned_code: a.scanned_code,
+        item_name: a.item_name,
+        room: a.room,
+        check_type: a.check_type,
+        check_value: a.check_value
+      }));
+      const csv = Papa.unparse(rows);
+      download(`audits_site_${S.siteId}.csv`, csv);
+    });
+
+    // Initial picker listeners
+    $('itemRoom').addEventListener('change', ()=>{ /* no-op */ });
+    $('itemType').addEventListener('change', ()=>{ /* no-op */ });
+
+    // Kick off
+    init();
+  </script>
+</body>
+</html>

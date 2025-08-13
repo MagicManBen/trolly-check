@@ -152,10 +152,15 @@
       display: table;
     }
     /* Actions row sticks to bottom via flex */
-    #screen-review .review-actions {
-      margin-top: auto;
-      justify-content: flex-end;
+    #screen-review .review-actions{
+      margin-top:auto;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      gap:12px;
     }
+    /* Bigger submit */
+    #btnSubmit.big{ padding:16px 28px; font-size:1.15rem; border-radius:14px; }
     /* Compact icon button for remove (matches app buttons but smaller) */
     .btn.icon { padding: 6px 10px; min-width: 36px; height: 36px; font-size: 20px; line-height: 1; border-radius: 10px; }
     .topbar { position:fixed; left:0; right:0; top:0; padding:10px 16px; display:flex; justify-content:space-between; align-items:center; background:linear-gradient(to bottom, rgba(0,0,0,.5), transparent); }
@@ -220,6 +225,23 @@
       pointer-events: none;
       box-shadow: 0 0 0 0 rgba(34,197,94,.60);
       animation: btnPulse 1.8s ease-in-out infinite; /* faster, more obvious */
+    }
+    #btnSubmit {
+      position: relative;
+      background: var(--accent) !important;
+      border-color: transparent !important;
+      color: #04130a !important;
+      font-weight: 700;
+      box-shadow: 0 10px 30px rgba(34,197,94,.55), 0 0 12px rgba(34,197,94,.45);
+    }
+    #btnSubmit::after {
+      content: "";
+      position: absolute;
+      inset: -10px;                 /* larger halo like Begin */
+      border-radius: 18px;          /* match rounding */
+      pointer-events: none;
+      box-shadow: 0 0 0 0 rgba(34,197,94,.60);
+      animation: btnPulse 1.8s ease-in-out infinite;
     }
     @keyframes btnPulse {
       0%   { box-shadow: 0 0 0 0 rgba(34,197,94,.60); }
@@ -362,6 +384,52 @@
     #screen-reset #btnResetDone { font-size: 1.15rem; padding: 14px 22px; }
     /* Keep QR at library default (220px) */
     #screen-reset #qrReset canvas, #screen-reset #qrReset img { width: 220px !important; height: 220px !important; }
+
+    /* --- NEW Review & Submit redesign (cards + accordions) --- */
+    /* shell */
+    .review-shell{ display:flex; flex-direction:column; gap:14px; }
+    .review-header{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .review-header .title{ display:flex; align-items:center; gap:10px; }
+    .review-header .pulse-dot{ width:10px; height:10px; border-radius:50%; background: var(--accent);
+      box-shadow: 0 0 10px var(--accent), 0 0 22px rgba(34,197,94,.5); animation:pulseTiny 1.6s ease-in-out infinite; }
+    @keyframes pulseTiny{ 0%,100%{ transform:scale(.9); opacity:.9 } 50%{ transform:scale(1.15); opacity:1 } }
+    .count-pill{ padding:6px 10px; background:#1e232b; border:1px solid var(--line); border-radius:999px; font-size:12px; }
+
+    /* layout + container that fills panel */
+    #reviewGroups{ flex:1 1 auto; min-height:0; overflow:auto; display:grid; gap:12px; }
+
+    /* room accordion (details/summary) */
+    .room-group{ border:1px solid var(--line); border-radius:14px; background:linear-gradient(180deg,#111317,#0f1216); overflow:clip; }
+    .room-group[open]{ box-shadow:0 0 0 1px rgba(34,197,94,.2), 0 8px 22px rgba(0,0,0,.35); }
+    .room-group summary{ list-style:none; cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; position:sticky; top:0; z-index:1;
+      background:linear-gradient(180deg, rgba(16,18,22,.9), rgba(16,18,22,.65)); border-bottom:1px solid var(--line); backdrop-filter: blur(4px); }
+    .room-group summary::-webkit-details-marker{ display:none; }
+    .room-badge{ display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:.2px; }
+    .room-dot{ width:10px; height:10px; border-radius:50%; background: var(--accent); box-shadow: 0 0 10px var(--accent), 0 0 22px rgba(34,197,94,.5); }
+    .room-name{ font-weight:700; }
+    .room-count{ font-size:12px; color:var(--muted); padding:2px 8px; border:1px solid var(--line); border-radius:9999px; }
+
+    /* item cards */
+    .group-items{ display:grid; gap:10px; padding:12px; }
+    .item-card{ display:grid; grid-template-columns: 1fr minmax(140px, 220px) 40px; align-items:center; gap:10px; padding:12px; border:1px solid #2a2f36; border-radius:12px; background:#0f1216;
+      animation:itemIn .25s ease both; }
+    .item-card:hover{ box-shadow:0 0 0 1px rgba(34,197,94,.25), 0 6px 18px rgba(0,0,0,.35); transform:translateY(-1px); transition: box-shadow .2s, transform .2s; }
+    .item-main .item-name{ font-weight:600; letter-spacing:.2px; }
+    .item-main .item-sub{ font-size:12px; color:var(--muted); }
+    .item-type select.rowType{ width:100%; min-height: 44px; }
+    .btn-remove{ justify-self:end; }
+
+    @keyframes itemIn{ from{ opacity:0; transform: translateY(6px) } to{ opacity:1; transform:none } }
+    .pop-out{ animation: popOut .22s ease forwards; }
+    @keyframes popOut{ to{ opacity:0; transform: scale(.98); filter: blur(1px) } }
+
+    /* sticky submit dock */
+    .review-dock{ position:sticky; bottom:0; background:linear-gradient(to top, rgba(14,15,17,.95), rgba(14,15,17,.75)); backdrop-filter: blur(6px);
+      padding:10px 12px; border-top:1px solid var(--line); display:flex; align-items:center; justify-content:center; gap:12px; }
+    .review-dock .btn.primary.big{ padding:16px 28px; font-size:1.15rem; border-radius:14px; }
+
+    /* widen panel on this screen */
+    #screen-review .panel{ width:min(1000px, 96vw); }
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -440,18 +508,21 @@
   </div>
 
   <div class="wrap hidden" id="screen-review">
-    <div class="panel center" style="width:min(820px, 96vw)">
-      <h2 class="glow">Review & Submit</h2>
-      <table id="reviewTable" class="review-table"><thead><tr><th>Name</th><th>Room</th><th>Check Type</th><th></th></tr></thead><tbody></tbody></table>
-      <div class="hr"></div>
-      <div class="pad">
-        <input id="comment" type="text" placeholder="Optional notes (e.g., anything unusual)" />
+    <div class="panel">
+      <div class="review-shell">
+        <div class="review-header">
+          <div class="title">
+            <span class="pulse-dot" aria-hidden="true"></span>
+            <h2 class="glow" style="margin:0">Review & Submit</h2>
+          </div>
+          <span class="count-pill" id="reviewCount">0</span>
+        </div>
+        <div id="reviewGroups" aria-live="polite"></div>
+        <div class="review-dock">
+          <button class="btn primary big" id="btnSubmit">Submit</button>
+          <span id="submitMsg" class="muted"></span>
+        </div>
       </div>
-      <div class="row review-actions">
-        <button class="btn" id="btnBackToUpload">Back</button>
-        <button class="btn primary" id="btnSubmit">Submit</button>
-      </div>
-      <p id="submitMsg" class="muted"></p>
     </div>
   </div>
 
@@ -466,7 +537,14 @@
           <p id="uploadStatus" class="muted hidden">Captured: <span id="capCount">0</span></p>
         </div>
       </div>
-      <input id="uploadInput" autocomplete="off" autocapitalize="off" spellcheck="false" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;" />
+      <input
+  id="uploadInput"
+  autocomplete="off"
+  autocapitalize="off"
+  spellcheck="false"
+  inputmode="none"
+  style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;"
+/>
     </div>
   </div>
 
@@ -511,7 +589,15 @@
       btn.textContent = showExit ? 'Exit Audit' : 'Logout';
 
       // Manage persistent focus for the hidden upload input
-      if (id === 'screen-upload') { startUploadFocusLoop(); } else { stopUploadFocusLoop(); }
+      if (id === 'screen-upload') {
+        startUploadFocusLoop();
+      } else {
+        stopUploadFocusLoop();
+        // Ensure the hidden upload input cannot steal focus on other screens (iPad keyboard issue)
+        const u = $('uploadInput');
+        if (u) u.blur();
+      }
+
     }
 
     function show(id) {
@@ -615,12 +701,17 @@
       if (uploadFocusTimer) clearInterval(uploadFocusTimer);
       // initial focus
       focusUploadInput();
-      // keep refocusing periodically while on the upload screen
+      // aggressively keep focus while on the upload screen
       uploadFocusTimer = setInterval(()=>{
         if (currentScreen !== 'screen-upload') { clearInterval(uploadFocusTimer); uploadFocusTimer = null; return; }
         const el = $('uploadInput');
         if (el && document.activeElement !== el) { el.focus(); }
-      }, 1000);
+      }, 250);
+      // if the input ever blurs while we're on this screen, refocus immediately
+      const el = $('uploadInput');
+      if (el) {
+        el.onblur = () => { if (currentScreen === 'screen-upload') setTimeout(focusUploadInput, 0); };
+      }
     }
     function stopUploadFocusLoop(){
       if (uploadFocusTimer) { clearInterval(uploadFocusTimer); uploadFocusTimer = null; }
@@ -631,6 +722,24 @@
         focusUploadInput();
       }
     });
+    // Aggressively re-assert focus on the hidden input when the page/tab regains focus, after navigations, and on any pointer/focus events while on the upload screen
+    window.addEventListener('pageshow', ()=>{
+      if (currentScreen === 'screen-upload') focusUploadInput();
+    });
+    window.addEventListener('focus', ()=>{
+      if (currentScreen === 'screen-upload') focusUploadInput();
+    });
+    // Capture any taps/clicks and re-assert focus on the hidden input
+    document.addEventListener('pointerdown', ()=>{
+      if (currentScreen === 'screen-upload') focusUploadInput();
+    }, true);
+    // If focus drifts to any other element while on the upload screen, pull it back
+    document.addEventListener('focusin', (e)=>{
+      if (currentScreen === 'screen-upload') {
+        const el = $('uploadInput');
+        if (el && e.target !== el) { el.focus(); }
+      }
+    }, true);
     function startResetCountdown(seconds = 30) {
       if (resetInterval) { clearInterval(resetInterval); resetInterval = null; }
       const el = $('resetCountdown');
@@ -765,7 +874,6 @@ function stopScanTrollyCycle(){
         resetUploadUI();
         const sl = $('scanList'); if (sl) sl.innerHTML = '';
         const sc = $('scanCount'); if (sc) sc.textContent = '0';
-        const cm = $('comment'); if (cm) cm.value = '';
         if (resetInterval) { clearInterval(resetInterval); resetInterval = null; }
         show('screen-pin');
         return;
@@ -808,7 +916,7 @@ function stopScanTrollyCycle(){
       }
     }
 
-    // Begin -> scanning, auto-advance to upload after 10 seconds
+    // Begin -> scanning, auto-advance to upload after 3 seconds
     $('btnBegin').addEventListener('click', ()=>{
       S.scans = [];
       show('screen-scanning');
@@ -817,7 +925,7 @@ function stopScanTrollyCycle(){
         show('screen-upload');
         showUploadQR();
         focusUploadInput();
-      }, 10000);
+      }, 3000);
     });
 
     function addScan(code) {
@@ -830,21 +938,28 @@ function stopScanTrollyCycle(){
     $('uploadInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); const raw=e.target.value.trim(); e.target.value=''; const m=raw.match(/^\d{10}$/); if(!m){ scheduleUploadAutoContinue(); return; } const code=m[0]; if(!S.scans.includes(code)){ const wasEmpty = S.scans.length === 0; S.scans.push(code); if (wasEmpty) { showUploadCounter(); } updateUploadCounter(); } scheduleUploadAutoContinue(); }});
     $('btnResetDone').addEventListener('click', () => { if (resetInterval) { clearInterval(resetInterval); resetInterval = null; } show('screen-pin'); });
 
-    $('btnBackToUpload').addEventListener('click', ()=>{
-      show('screen-upload');
-      showUploadQR();
-      focusUploadInput();
-    });
+
+
 
     async function refreshReview() {
       // Normalise scanned codes (strings, trimmed, unique)
       const codes = Array.from(new Set((S.scans || []).map(c => String(c).trim())));
 
-      // Short-circuit if nothing scanned
-      const tb = $('reviewTable')?.querySelector('tbody');
-      if (!tb) return;
-      tb.innerHTML = '';
-      if (!codes.length) return;
+      const container = $('reviewGroups');
+      const countEl = $('reviewCount');
+      const submitBtn = document.getElementById('btnSubmit');
+      const msg = document.getElementById('submitMsg');
+
+      if (!container) return;
+      container.innerHTML = '';
+      if (countEl) countEl.textContent = String(codes.length);
+
+      // If nothing scanned, short-circuit and disable submit
+      if (!codes.length) {
+        if (submitBtn) submitBtn.disabled = true;
+        if (msg) msg.textContent = 'No items to submit.';
+        return;
+      } else if (msg) { msg.textContent = ''; }
 
       // Use siteId; hard-fail if not initialised
       const siteId = S.siteId;
@@ -852,14 +967,12 @@ function stopScanTrollyCycle(){
 
       // Fetch ONLY the scanned items for this site
       const rows = await fetchItemsByIds(siteId, codes);
-      if (!rows || rows.length === 0) {
-        toast('No matching items found for this site. Check scanned codes or permissions.');
-      }
 
       // Build a quick lookup map (string keys)
       const byId = new Map();
       for (const r of (rows||[])) byId.set(String(r.item_id).trim(), r);
 
+      // Types guard (site mis-config)
       guardSubmitForTypes();
 
       // --- Group by Room, preserving scan order ---
@@ -872,40 +985,45 @@ function stopScanTrollyCycle(){
         groups.get(room).push({ code, it });
       }
 
-      // Render groups
+      // Render groups as accordions
       for (const [room, list] of groups) {
-        // Group header row (sticky within tbody)
-        const ghtr = document.createElement('tr');
-        ghtr.className = 'group-row';
-        const ghtd = document.createElement('td');
-        ghtd.colSpan = 4;
-        ghtd.innerHTML = `
-          <div class="group-head">
-            <div class="left">
-              <span class="room-dot" aria-hidden="true"></span>
-              <span class="room-name">${room}</span>
-            </div>
-            <span class="room-count">${list.length} item${list.length>1?'s':''}</span>
-          </div>`;
-        ghtr.appendChild(ghtd);
-        tb.appendChild(ghtr);
+        const details = document.createElement('details');
+        details.className = 'room-group';
+        details.setAttribute('open','open');
 
-        // Group items
+        const sum = document.createElement('summary');
+        sum.innerHTML = `
+          <div class="room-badge">
+            <span class="room-dot" aria-hidden="true"></span>
+            <span class="room-name">${room}</span>
+          </div>
+          <span class="room-count">${list.length} item${list.length>1?'s':''}</span>`;
+        details.appendChild(sum);
+
+        const itemsWrap = document.createElement('div');
+        itemsWrap.className = 'group-items';
+
         for (const { code, it } of list) {
-          const tr = document.createElement('tr');
-          tr.className = 'group-item';
+          const card = document.createElement('div');
+          card.className = 'item-card';
 
-          const tdName = document.createElement('td');
-          tdName.textContent = it ? it.item_name : '(Unknown)';
+          const main = document.createElement('div');
+          main.className = 'item-main';
+          const nameEl = document.createElement('div');
+          nameEl.className = 'item-name';
+          nameEl.textContent = it ? it.item_name : '(Unknown)';
+          const subEl = document.createElement('div');
+          subEl.className = 'item-sub mono';
+          subEl.textContent = `ID ${code}`;
+          main.appendChild(nameEl);
+          main.appendChild(subEl);
 
-          const tdRoom = document.createElement('td');
-          tdRoom.className = 'room-cell';
-          tdRoom.textContent = room; // keeps grouping obvious while dimmed
-
-          const tdType = document.createElement('td');
+          const typeWrap = document.createElement('div');
+          typeWrap.className = 'item-type';
           const sel = document.createElement('select');
           sel.className = 'rowType';
           sel.setAttribute('data-item-id', code);
+          sel.setAttribute('aria-label', `Check type for ${nameEl.textContent}`);
 
           // Determine types for this item's category
           const category = it?.category || 'general';
@@ -916,32 +1034,47 @@ function stopScanTrollyCycle(){
           // Prefer per-item default if present and valid; otherwise fall back to first type
           const def = it && it.default_check_type;
           if (def && types.includes(def)) sel.value = def; else if (types.length) sel.value = types[0];
-          tdType.appendChild(sel);
+          typeWrap.appendChild(sel);
 
-          // Remove column/button
-          const tdRemove = document.createElement('td');
-          const btnRemove = document.createElement('button');
-          btnRemove.className = 'btn danger icon';
-          btnRemove.type = 'button';
-          btnRemove.textContent = '×';
-          btnRemove.setAttribute('aria-label', 'Remove this item');
-          btnRemove.addEventListener('click', ()=>{
+          const removeBtn = document.createElement('button');
+          removeBtn.className = 'btn danger icon btn-remove';
+          removeBtn.type = 'button';
+          removeBtn.textContent = '×';
+          removeBtn.setAttribute('aria-label', 'Remove this item');
+          removeBtn.addEventListener('click', () => {
             // Remove this scanned code from state
             S.scans = S.scans.filter(c => c !== code);
-            // Remove the row from the table
-            tr.remove();
-            // If no items remain, disable submit and show a hint
-            const submitBtn = document.getElementById('btnSubmit');
-            const msg = document.getElementById('submitMsg');
-            if (submitBtn) submitBtn.disabled = (S.scans.length === 0);
-            if (S.scans.length === 0 && msg) msg.textContent = 'No items to submit.';
-          });
-          tdRemove.appendChild(btnRemove);
 
-          tr.appendChild(tdName); tr.appendChild(tdRoom); tr.appendChild(tdType); tr.appendChild(tdRemove);
-          tb.appendChild(tr);
+            // Animate and remove the card
+            card.classList.add('pop-out');
+            setTimeout(() => {
+              card.remove();
+
+              // Update room count and possibly remove the entire group
+              const rem = details.querySelectorAll('.item-card').length;
+              const countBadge = sum.querySelector('.room-count');
+              if (countBadge) countBadge.textContent = `${rem} item${rem===1?'':'s'}`;
+              if (rem === 0) details.remove();
+
+              // Update global count + submit state
+              if (countEl) countEl.textContent = String(S.scans.length);
+              if (submitBtn) submitBtn.disabled = submitBtn.disabled || (S.scans.length === 0);
+              if (S.scans.length === 0 && msg) msg.textContent = 'No items to submit.';
+            }, 200);
+          });
+
+          card.appendChild(main);
+          card.appendChild(typeWrap);
+          card.appendChild(removeBtn);
+          itemsWrap.appendChild(card);
         }
+
+        details.appendChild(itemsWrap);
+        container.appendChild(details);
       }
+
+      // Ensure submit disabled if there are no items regardless of types
+      if (submitBtn) submitBtn.disabled = submitBtn.disabled || (S.scans.length === 0);
     }
 
     // Submit
@@ -950,12 +1083,10 @@ function stopScanTrollyCycle(){
       if (!S.scans.length) { $('submitMsg').textContent='No scans.'; return; }
       const selects = Array.from(document.querySelectorAll('.rowType'));
       const staffName = S.staff?.name || 'Staff';
-      const commentEl = $('comment');
-      const comment = commentEl ? commentEl.value.trim() : '';
 
       const sessionId = (crypto.randomUUID && crypto.randomUUID()) || String(Date.now());
       const { data: sub, error: e1 } = await sb.from('submissions')
-        .insert({ site_id: S.siteId, session_id: sessionId, staff_name: staffName, comment })
+        .insert({ site_id: S.siteId, session_id: sessionId, staff_name: staffName })
         .select('id').single();
       if (e1) { $('submitMsg').textContent = e1.message; return; }
       const sid = sub.id;
@@ -971,7 +1102,6 @@ function stopScanTrollyCycle(){
       $('submitMsg').textContent='Submitted!';
       toast('Submission uploaded');
       S.scans = [];
-      const cmEl = $('comment'); if (cmEl) cmEl.value='';
       show('screen-reset');
       showResetQR();
       startResetCountdown(30);
