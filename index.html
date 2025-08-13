@@ -300,6 +300,13 @@
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVudmVvcW5scW5vYnVmaHVibHl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwMTcyNzYsImV4cCI6MjA3MDU5MzI3Nn0.g93OsXDpO3V9DToU7s-Z3SwBBnB84rBv0JMv-idgSME";
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    // Debug mode: use anon read-only client when ?debug=1 is present
+    const DEBUG = new URLSearchParams(location.search).has('debug');
+    const sbPublic = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+    function readClient(){ return DEBUG ? sbPublic : sb; }
+
     // State
     const S = { siteId: null, user: null, staff: null, scans: [], itemsById: new Map(), types: [] };
 
@@ -320,6 +327,16 @@
       setTopbarFor(id);
     }
     function toast(msg) { const t=$('toast'); t.textContent=msg; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'), 1600); }
+    // Disable Submit when no check types are available
+    function guardSubmitForTypes(){
+      const b = document.getElementById('btnSubmit');
+      const m = document.getElementById('submitMsg');
+      if (!b) return;
+      const ok = Array.isArray(S.types) && S.types.length > 0;
+      b.disabled = !ok;
+      if (!ok && m) m.textContent = 'No check types available for this site. Please contact an admin.';
+      else if (m) m.textContent = '';
+    }
     const sleep = (ms)=> new Promise(r=>setTimeout(r,ms));
     function pinDots(n) { for (let i=1;i<=4;i++) { const d=$('d'+i); if(!d) continue; d.classList.toggle('filled', i<=n); } }
 
@@ -390,35 +407,11 @@
 
       // --- 1) JS client: straightforward .in() with strings ---
       try{
-        const { data, error } = await sb
+        const { data, error } = await readClient()
           .from('items')
           .select('item_id, item_name, room')
           .eq('site_id', siteId)
           .in('item_id', ids);
-        if (!error && Array.isArray(data) && data.length) return data;
-      }catch(_){}
-
-      // Prepare in-list variants (without quotes and with quotes)
-      const inListNoQuotes = `(${ids.join(',')})`;
-      const inListQuotes   = `(${ids.map(v => `"${v}"`).join(',')})`;
-
-      // --- 2) JS client: PostgREST-style filter (no quotes) ---
-      try{
-        const { data, error } = await sb
-          .from('items')
-          .select('item_id, item_name, room')
-          .eq('site_id', siteId)
-          .filter('item_id', 'in', inListNoQuotes);
-        if (!error && Array.isArray(data) && data.length) return data;
-      }catch(_){}
-
-      // --- 3) JS client: PostgREST-style filter (with quotes) ---
-      try{
-        const { data, error } = await sb
-          .from('items')
-          .select('item_id, item_name, room')
-          .eq('site_id', siteId)
-          .filter('item_id', 'in', inListQuotes);
         if (!error && Array.isArray(data) && data.length) return data;
       }catch(_){}
 
@@ -439,10 +432,11 @@
 
     // Preload items and types for fast lookup
     async function preloadCache() {
-      const i = await sb.from('items').select('item_id, item_name, room').eq('site_id', S.siteId).order('item_name');
+      const i = await readClient().from('items').select('item_id, item_name, room').eq('site_id', S.siteId).order('item_name');
       if (!i.error) { S.itemsById.clear(); (i.data||[]).forEach(r=>S.itemsById.set(r.item_id, r)); }
-      const t = await sb.from('check_types').select('name').eq('site_id', S.siteId).order('name');
+      const t = await readClient().from('check_types').select('name').eq('site_id', S.siteId).order('name');
       if (!t.error) { S.types = (t.data||[]).map(r=>r.name); }
+      guardSubmitForTypes();
     }
 
     // Login
@@ -540,17 +534,22 @@
       tb.innerHTML = '';
       if (!codes.length) return;
 
-      // Use siteId (fallback to 1 if somehow not initialised yet)
-      const siteId = (S.siteId ?? 1);
+      // Use siteId; hard-fail if not initialised
+      const siteId = S.siteId;
+      if (siteId == null) { toast('No site configured. Please sign out and sign in again.'); return; }
 
       // Fetch ONLY the scanned items for this site (with fallback)
       const rows = await fetchItemsByIds(siteId, codes);
+      if (!rows || rows.length === 0) {
+        toast('No matching items found for this site. Check scanned codes or permissions.');
+      }
 
       // Build a quick lookup map (string keys)
       const byId = new Map();
       for (const r of (rows||[])) byId.set(String(r.item_id).trim(), r);
 
       const types = S.types && S.types.length ? S.types : ['Working'];
+      guardSubmitForTypes();
 
       // Render rows in the same order as scanned
       for (const code of codes) {
