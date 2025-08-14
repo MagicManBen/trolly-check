@@ -1329,12 +1329,13 @@
       }
       logDebug('Storage in use: ' + (SB_STORAGE === window.localStorage ? 'localStorage' : SB_STORAGE === window.sessionStorage ? 'sessionStorage' : 'custom') + ' • key=' + (getAuthStorageKey() || '(none)'));
 
-      // Only clear local scope if Supabase believes we have one (avoid races with hydration)
+      // If a session already exists, don't clear it — just initialise the app
       try{
         const { data: { session } } = await sb.auth.getSession();
         if(session){
-          await sb.auth.signOut({ scope: 'local' });
-          logDebug('Cleared local session before sign-in.');
+          logDebug('Already signed in; running init() instead of sign-in.');
+          await init();
+          return;
         }
       }catch(_){ /* ignore */ }
 
