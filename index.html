@@ -564,23 +564,22 @@ async function handleAuthRedirect(){
       }catch(_){ /* ignore */ }
 }
 
-// Keep UI in sync when auth state changes (e.g., right after confirm-email redirect)
-sb.auth.onAuthStateChange(async (event) => {
+// Keep UI in sync when auth state changes, but avoid forcing SIGNED_OUT on boot
+sb.auth.onAuthStateChange(async (event, session) => {
+  logDebug('onAuthStateChange: ' + event + ' (hasSession=' + Boolean(session) + ')');
   if(event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED'){
     await init();
   }
-  if(event === 'SIGNED_OUT'){
-    document.querySelector('.app')?.classList.add('hidden');
-    document.getElementById('loginPage')?.classList.remove('hidden');
-  }
+  // Do NOT auto-hide the app on SIGNED_OUT here; rely on explicit logout or init() checks.
 });
 function __boot(){
   logDebug('Booting… protocol='+location.protocol+' href='+location.href);
-  try{
-    handleAuthRedirect().then(()=> init());
-  }catch(_){
-    try{ init(); }catch(__){}
-  }
+  (async()=>{
+    try{
+      await handleAuthRedirect();
+    }catch(_){ /* ignore */ }
+    await init();
+  })();
 }
 if(document.readyState === 'loading'){
   window.addEventListener('DOMContentLoaded', __boot);
@@ -684,11 +683,16 @@ if(document.readyState === 'loading'){
     // ====== INIT & AUTH ======
     async function init(){
       logDebug('init(): fetching session…');
+      // Prevent duplicate UI work if already on correct screen
+      const appEl = document.querySelector('.app');
+      const loginEl = document.getElementById('loginPage');
       const { data:{ session } } = await sb.auth.getSession();
       logDebug('init(): session present? ' + Boolean(session));
       if(!session){
-        document.querySelector('.app')?.classList.add('hidden');
-        document.getElementById('loginPage')?.classList.remove('hidden');
+        appEl?.classList.add('hidden');
+        loginEl?.classList.remove('hidden');
+        // Keep button enabled and clickable after refresh
+        const btn = document.getElementById('lpSignIn'); if(btn) btn.disabled = false;
         populateSiteSelect();
         return;
       }
@@ -1200,6 +1204,7 @@ if(document.readyState === 'loading'){
       if(!email || !password){
         $('lpMsg').textContent = 'Enter email and password.';
         logDebug("Missing email or password.");
+        $('lpSignIn')?.removeAttribute('disabled');
         return;
       }
 
@@ -1235,6 +1240,7 @@ if(document.readyState === 'loading'){
         if(error){
           logDebug("Supabase error: " + JSON.stringify(error));
           $('lpMsg').textContent = error.message || 'Login failed.';
+          $('lpSignIn')?.removeAttribute('disabled');
           return;
         }
         logDebug('Session received: ' + (!!data?.session));
@@ -1258,7 +1264,9 @@ if(document.readyState === 'loading'){
       } catch (err) {
         logDebug("Unexpected error: " + (err?.message||err?.toString()||'unknown'));
         $('lpMsg').textContent = (err && err.message) ? err.message : 'Login failed (network).';
+        $('lpSignIn')?.removeAttribute('disabled');
       } finally {
+        $('lpSignIn')?.removeAttribute('disabled');
         clearInterval(tickTimer);
       }
     }
@@ -1298,12 +1306,13 @@ if(document.readyState === 'loading'){
     }
 
     $('lpSignIn').addEventListener('click', async ()=>{
+      const btn = $('lpSignIn'); if(btn) btn.disabled = true; setTimeout(()=>{ if(btn) btn.disabled = false; }, 18000);
       if(lpAuthMode==='signup'){
         const email=$('lpEmail').value.trim();
         const password=$('lpPass').value;
         const siteId = $('lpSiteSelect')?.value || '';
-        if(!email || !password){ $('lpMsg').textContent='Enter email and password.'; return; }
-        if(!siteId){ $('lpMsg').textContent='Please select a site.'; return; }
+        if(!email || !password){ $('lpMsg').textContent='Enter email and password.'; if(btn) btn.disabled = false; return; }
+        if(!siteId){ $('lpMsg').textContent='Please select a site.'; if(btn) btn.disabled = false; return; }
         setSignupStep(2);
         $('lpMsg').textContent = 'Almost there — add your full name.';
         $('lpName')?.focus();
