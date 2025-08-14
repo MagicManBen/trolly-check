@@ -680,22 +680,37 @@ if(document.readyState === 'loading'){
     }
     function closeRoomItemsModal(){ const m=$('roomItemsModal'); if(m) m.classList.add('hidden'); }
 
-    // ====== INIT & AUTH ======
-    async function init(){
-      logDebug('init(): fetching session…');
-      // Prevent duplicate UI work if already on correct screen
-      const appEl = document.querySelector('.app');
-      const loginEl = document.getElementById('loginPage');
-      const { data:{ session } } = await sb.auth.getSession();
-      logDebug('init(): session present? ' + Boolean(session));
-      if(!session){
-        appEl?.classList.add('hidden');
-        loginEl?.classList.remove('hidden');
-        // Keep button enabled and clickable after refresh
-        const btn = document.getElementById('lpSignIn'); if(btn) btn.disabled = false;
-        populateSiteSelect();
-        return;
-      }
+   // ====== INIT & AUTH ======
+async function init(){
+  logDebug('init(): fetching session…');
+
+  const appEl = document.querySelector('.app');
+  const loginEl = document.getElementById('loginPage');
+
+  // 1) fetch session
+  let { data: { session } } = await sb.auth.getSession();
+
+  // 2) if missing, try to rescue and THEN update `session`
+  if (!session) {
+    const rescued = await rescueSessionFromStorage();
+    if (rescued) {
+      // re-read session so the next check uses the fresh value
+      ({ data: { session } } = await sb.auth.getSession());
+    }
+  }
+
+  // 3) proceed based on the UPDATED `session`
+  if (!session) {
+    appEl?.classList.add('hidden');
+    loginEl?.classList.remove('hidden');
+    const btn = document.getElementById('lpSignIn'); if (btn) btn.disabled = false;
+    populateSiteSelect();
+    return;
+  }
+
+  // ... (rest of your init as-is)
+
+
       S.user = session.user;
       $('who').textContent = S.user.email || 'Signed in';
       // Get profile -> site, auto-create if missing using user_metadata
