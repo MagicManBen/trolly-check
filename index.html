@@ -144,13 +144,6 @@
     .modal input,.modal select,.modal textarea{font-size:16px}
     .modal .table-wrap{max-height:48vh}
     .modal .tools .btn.small{font-size:12px;padding:6px 8px}
-
-    /* --- FULL AUTH PAGE --- */
-    .auth-page{position:fixed;inset:0;z-index:2000;background:radial-gradient(1000px 280px at -10% -20%, rgba(34,197,94,.12), transparent), var(--bg);display:flex;align-items:center;justify-content:center;padding:18px}
-    .auth-card{width:min(560px,94vw);background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px}
-    .auth-card h1{margin:0 0 12px 0;font-size:22px}
-    .auth-actions{display:flex;gap:10px;align-items:center}
-    .auth-footer{display:flex;justify-content:space-between;align-items:center;margin-top:10px;color:var(--muted);font-size:13px}
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
@@ -177,6 +170,29 @@
     </aside>
 
     <main class="main">
+      <!-- LOGIN PANEL -->
+      <div id="panel-login" class="card">
+        <h3>Sign in</h3>
+        <div class="grid cols-3">
+          <div><input id="loginEmail" type="text" placeholder="email@example.com"></div>
+          <div><input id="loginPass" type="password" placeholder="Password"></div>
+          <div><button class="btn primary" id="doLogin">Sign in</button></div>
+        </div>
+        <div id="loginMsg" class="muted" style="margin-top:8px"></div>
+
+        <div class="muted" style="margin-top:10px">
+          <a href="#" id="toggleAuth">Create an account</a>
+          &nbsp;•&nbsp;
+          <a href="#" id="forgotLink">Forgot password?</a>
+        </div>
+
+        <!-- extra fields shown only in Sign-up mode -->
+        <div id="signupRow" class="grid cols-3 hidden" style="margin-top:10px">
+          <div><input id="signupName" type="text" placeholder="Full name"></div>
+          <div><input id="signupSite" type="number" placeholder="Site ID"></div>
+          <div><button class="btn" id="doSignup">Create account</button></div>
+        </div>
+      </div>
       <!-- MAIN APP PANEL -->
       <div id="panel-app" class="hidden">
         <div class="topbar">
@@ -455,36 +471,6 @@
 
   <div id="toast" class="toast hidden"></div>
 
-  <!-- Full-screen Auth Page (Sign in / Sign up) -->
-  <div id="page-auth" class="auth-page hidden">
-    <div class="auth-card">
-      <h1 id="authTitle">Sign in</h1>
-      <div class="grid cols-2">
-        <div><input id="authEmail" type="text" placeholder="email@example.com"></div>
-        <div><input id="authPass" type="password" placeholder="Password"></div>
-      </div>
-      <div id="authMsg" class="muted" style="margin-top:8px"></div>
-
-      <div class="auth-footer">
-        <div>
-          <a href="#" id="authToggle">Create an account</a>
-          &nbsp;•&nbsp;
-          <a href="#" id="authForgot">Forgot password?</a>
-        </div>
-        <div class="auth-actions">
-          <button class="btn primary" id="authLoginBtn">Sign in</button>
-        </div>
-      </div>
-
-      <!-- Sign-up extras (shown in Sign-up mode) -->
-      <div id="authSignupRow" class="grid cols-3 hidden" style="margin-top:12px">
-        <div><input id="authName" type="text" placeholder="Full name"></div>
-        <div><input id="authSite" type="number" placeholder="Site ID"></div>
-        <div><button class="btn" id="authSignupBtn">Create account</button></div>
-      </div>
-    </div>
-  </div>
-
   <!-- Room Items Modal -->
   <div id="roomItemsModal" class="modal-overlay hidden">
     <div class="modal" role="dialog" aria-modal="true">
@@ -569,16 +555,6 @@
     }
 
     function isPinSet(v){
-    function showAuthPage(){
-      document.getElementById('page-auth')?.classList.remove('hidden');
-      document.querySelector('.sidebar')?.classList.add('hidden');
-      document.getElementById('panel-app')?.classList.add('hidden');
-    }
-    function hideAuthPage(){
-      document.getElementById('page-auth')?.classList.add('hidden');
-      document.querySelector('.sidebar')?.classList.remove('hidden');
-      document.getElementById('panel-app')?.classList.remove('hidden');
-    }
       // Treat PIN as set when the plain pin column has a non-empty value
       // and is not the placeholder string 'EMPTY'.
       return typeof v === 'string' && v.trim() !== '' && v.trim().toUpperCase() !== 'EMPTY';
@@ -607,7 +583,7 @@
     // ====== INIT & AUTH ======
     async function init(){
       const { data:{ session } } = await sb.auth.getSession();
-      if(!session){ showAuthPage(); return; }
+      if(!session){ $('panel-login').classList.remove('hidden'); $('panel-app').classList.add('hidden'); return; }
       S.user = session.user;
       $('who').textContent = S.user.email || 'Signed in';
       // Get profile -> site
@@ -615,7 +591,8 @@
       if(error || !prof || !prof.length){ $('site').textContent='No profile/site'; toast(error?.message||'No profile'); return; }
       S.profile = prof[0]; S.siteId = S.profile.site_id;
       $('site').textContent = `Site ${S.siteId}`;
-      hideAuthPage();
+      $('panel-login').classList.add('hidden');
+      $('panel-app').classList.remove('hidden');
       await refreshAll();
     }
 
@@ -1028,70 +1005,67 @@
     }
 
     // ====== ACTIONS ======
-    // Auth page (full-screen): sign-in, sign-up, reset
-    let authMode = 'login';
+    // Login
+    $('doLogin').addEventListener('click', async ()=>{
+      $('loginMsg').textContent = 'Signing in…';
+      const email=$('loginEmail').value.trim(), password=$('loginPass').value;
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if(error){ $('loginMsg').textContent = error.message; return; }
+      $('loginMsg').textContent='';
+      await init();
+    });
+    $('btnLogout').addEventListener('click', async ()=>{
+      await sb.auth.signOut(); location.reload();
+    });
+
+    // --- Auth mode toggle & helpers ---
+    let authMode = 'login'; // or 'signup'
     function setAuthMode(mode){
       authMode = mode;
-      const signupRow = document.getElementById('authSignupRow');
+      const signupRow = document.getElementById('signupRow');
       if (signupRow) signupRow.classList.toggle('hidden', mode !== 'signup');
-      const title = document.getElementById('authTitle');
-      if (title) title.textContent = (mode === 'signup') ? 'Create an account' : 'Sign in';
-      const toggle = document.getElementById('authToggle');
-      if (toggle) toggle.textContent = (mode === 'signup') ? 'Have an account? Sign in' : 'Create an account';
-      const msg = document.getElementById('authMsg'); if (msg) msg.textContent='';
+      const h = document.querySelector('#panel-login h3');
+      if (h) h.textContent = (mode === 'signup') ? 'Create an account' : 'Sign in';
+      const t = document.getElementById('toggleAuth');
+      if (t) t.textContent = (mode === 'signup') ? 'Have an account? Sign in' : 'Create an account';
+      const msg = document.getElementById('loginMsg');
+      if (msg) msg.textContent = '';
     }
-    document.getElementById('authToggle')?.addEventListener('click', (e)=>{
+    document.getElementById('toggleAuth')?.addEventListener('click', (e)=>{
       e.preventDefault(); setAuthMode(authMode === 'login' ? 'signup' : 'login');
     });
 
-    document.getElementById('authLoginBtn')?.addEventListener('click', async ()=>{
-      const email = document.getElementById('authEmail').value.trim();
-      const password = document.getElementById('authPass').value;
-      const msg = document.getElementById('authMsg');
-      if(!email || !password){ msg.textContent = 'Enter email & password.'; return; }
-      msg.textContent = 'Signing in…';
-      const { error } = await sb.auth.signInWithPassword({ email, password });
-      if(error){ msg.textContent = error.message; return; }
-      msg.textContent = '';
-      await init(); // will hide auth + load app
-    });
-
-    document.getElementById('authSignupBtn')?.addEventListener('click', async ()=>{
-      const email = document.getElementById('authEmail').value.trim();
-      const password = document.getElementById('authPass').value;
-      const full_name = document.getElementById('authName').value.trim();
-      const site_id = Number(document.getElementById('authSite').value || 1);
-      const msg = document.getElementById('authMsg');
-      if(!email || !password){ msg.textContent = 'Enter email & password.'; return; }
+    // --- Sign up (email & password) ---
+    document.getElementById('doSignup')?.addEventListener('click', async ()=>{
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPass').value;
+      const full_name = document.getElementById('signupName').value.trim();
+      const site_id = Number(document.getElementById('signupSite').value || 1);
+      const msg = document.getElementById('loginMsg');
+      if (!email || !password) { msg.textContent = 'Enter email & password.'; return; }
       msg.textContent = 'Creating account…';
       const { data, error } = await sb.auth.signUp({ email, password });
-      if(error){ msg.textContent = error.message; return; }
-      try{
+      if (error) { msg.textContent = error.message; return; }
+      // Create a profile row so app can resolve site_id on first login
+      try {
         const userId = data?.user?.id;
         if (userId) {
           await sb.from('profiles').insert({ user_id: userId, site_id, full_name, role: 'admin' });
         }
-      }catch(_){ /* ignore if trigger already creates profile */ }
+      } catch(_) { /* ignore insert errors (e.g., row exists or trigger handles it) */ }
       msg.textContent = 'Account created. Check your email to confirm, then sign in.';
       setAuthMode('login');
     });
 
-    document.getElementById('authForgot')?.addEventListener('click', async (e)=>{
+    // --- Forgot password (sends reset email) ---
+    document.getElementById('forgotLink')?.addEventListener('click', async (e)=>{
       e.preventDefault();
-      const email = document.getElementById('authEmail').value.trim();
-      const msg = document.getElementById('authMsg');
-      if(!email){ msg.textContent = 'Enter your email first.'; return; }
+      const email = document.getElementById('loginEmail').value.trim();
+      const msg = document.getElementById('loginMsg');
+      if (!email) { msg.textContent = 'Enter your email first.'; return; }
       msg.textContent = 'Sending reset email…';
       const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
       msg.textContent = error ? error.message : 'If that email exists, a reset link has been sent.';
-    });
-
-    $('btnLogout').addEventListener('click', async ()=>{
-      await sb.auth.signOut();
-      S.user = null; S.profile = null; S.siteId = null;
-      $('who').textContent = 'Not signed in';
-      $('site').textContent = '—';
-      showAuthPage();
     });
 
     // Navigation
