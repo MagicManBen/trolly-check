@@ -174,11 +174,13 @@
     .login-card a:hover{ color: var(--text); text-decoration: underline; }
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
 </head>
 <body>
-<!-- Login page removed -->
-<h2 id="lpTitle" style="margin:6px 0 14px 0">Sign in</h2>
+  <div id="loginPage" class="login-page">
+    <div class="login-card">
+      <div class="login-brand">CQC Admin</div>
+      <h2 id="lpTitle" style="margin:6px 0 14px 0">Sign in</h2>
       <div id="lpRowCreds" class="login-row">
         <input id="lpEmail" type="email" placeholder="email@example.com" autocomplete="username" />
         <input id="lpPass" type="password" placeholder="Password" autocomplete="current-password" />
@@ -200,7 +202,7 @@
       </div>
     </div>
   </div>
-  <div class="app">
+  <div class="app hidden">
     <aside class="sidebar">
       <div class="brand">CQC Admin</div>
       <div class="status">
@@ -223,7 +225,7 @@
     <main class="main">
       <!-- LOGIN PANEL -->
       <!-- MAIN APP PANEL -->
-      <div id="panel-app">
+      <div id="panel-app" class="hidden">
         <div class="topbar">
           <div class="pill">Admin</div>
           <div class="right">
@@ -485,43 +487,84 @@
     // ====== CONFIG ======
     const SUPABASE_URL = "https://unveoqnlqnobufhublyw.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVudmVvcW5scW5vYnVmaHVibHl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwMTcyNzYsImV4cCI6MjA3MDU5MzI3Nn0.g93OsXDpO3V9DToU7s-Z3SwBBnB84rBv0JMv-idgSME";
-    
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Connectivity test helper
+    async function checkSupabaseConnectivity(){
+      try{
+        logDebug('Pinging Supabase /auth settings…');
+        const res = await fetch(`${SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: SUPABASE_ANON_KEY } });
+        logDebug('Ping status: ' + res.status + ' ' + res.statusText);
+        return res.ok;
+      }catch(err){
+        logDebug('Ping failed: ' + (err?.message||err));
+        return false;
+      }
+    }
+// Handle email-confirmation / magic-link redirects (tokens in the URL hash)
+async function handleAuthRedirect(){
+      try{
+        const hash = window.location.hash || '';
+        const hasTokens = hash.includes('access_token') && hash.includes('refresh_token');
 
-try{
-  const which = (SB_STORAGE === window.localStorage)
-    ? 'localStorage (persists across closes/restarts)'
-    : (SB_STORAGE === window.sessionStorage)
-      ? 'sessionStorage (survives refresh, clears on tab close)'
-      : 'in-memory (no persistence)';
-  logDebug('Auth persistence: ' + which);
-}catch(_){}
+        if(hasTokens){
+          const p = new URLSearchParams(hash.substring(1));
+          const access_token  = p.get('access_token');
+          const refresh_token = p.get('refresh_token');
+          if(access_token && refresh_token){
+            await sb.auth.setSession({ access_token, refresh_token });
+          }
+          // Clean URL so the hash doesn't linger
+          history.replaceState({}, document.title, location.pathname + location.search);
+          return;
+        }
 
-
-catch(_){ /* ignore */ }
+        // If this is a confirm-email visit without tokens (common on some clients),
+        // just show the login page with a helpful message.
+        const qs = new URLSearchParams(location.search);
+        const isConfirm = hash.includes('type=signup') || qs.get('type') === 'signup' || hash.includes('confirmed=1') || qs.get('confirmed') === '1';
+        if(isConfirm){
+          document.querySelector('.app')?.classList.add('hidden');
+          document.getElementById('loginPage')?.classList.remove('hidden');
+          if(typeof setLpAuthMode==='function') setLpAuthMode('login');
+          const msg = document.getElementById('lpMsg');
+          if(msg) msg.textContent = 'Email confirmed — please sign in.';
+          // Tidy URL
+          history.replaceState({}, document.title, location.pathname);
+        }
+      }catch(_){ /* ignore */ }
 }
 
 // Keep UI in sync when auth state changes (e.g., right after confirm-email redirect)
-
-}catch(_){}
+sb.auth.onAuthStateChange(async (event, session) => {
+  try{ logDebug('Auth event: ' + event); }catch(_){}
   if(event === 'INITIAL_SESSION'){
     if(session){
       await init();
     }else{
       // No session on boot – show login explicitly
-      
-      
+      document.querySelector('.app')?.classList.add('hidden');
+      document.getElementById('loginPage')?.classList.remove('hidden');
     }
   }
   if(event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED'){
     await init();
   }
   if(event === 'SIGNED_OUT'){
-    
-    
+    document.querySelector('.app')?.classList.add('hidden');
+    document.getElementById('loginPage')?.classList.remove('hidden');
   }
 });
-
-else{
+function __boot(){
+  logDebug('Booting… protocol='+location.protocol+' href='+location.href);
+  try{
+    handleAuthRedirect().then(()=> init());
+  }catch(_){
+    try{ init(); }catch(__){}
+  }
+}
+if(document.readyState === 'loading'){
+  window.addEventListener('DOMContentLoaded', __boot);
+}else{
   __boot();
 }
     // ====== STATE ======
@@ -621,30 +664,30 @@ else{
     // ====== INIT & AUTH ======
     async function init(){
       logDebug('init(): fetching session…');
-      let sessionRes = await 
-let session = sessionRes?.data?.session || null;
+      let sessionRes = await sb.auth.getSession();
+      let session = sessionRes?.data?.session || null;
       // On hard refresh, Supabase may hydrate the stored session asynchronously.
       // Poll briefly so we don't falsely treat the user as signed out.
       if(!session){
         for(let i=0;i<15;i++){
           await new Promise(r=>setTimeout(r, 100));
-          sessionRes = await 
-session = sessionRes?.data?.session || null;
+          sessionRes = await sb.auth.getSession();
+          session = sessionRes?.data?.session || null;
           if(session) break;
         }
       }
       logDebug('init(): session present? ' + Boolean(session));
       if(!session){
-        
-        
+        document.querySelector('.app')?.classList.add('hidden');
+        document.getElementById('loginPage')?.classList.remove('hidden');
         populateSiteSelect();
         return;
       }
       S.user = session.user;
       $('who').textContent = S.user.email || 'Signed in';
       // --- UNGATE: show app immediately once we have a Supabase session ---
-
-
+document.getElementById('loginPage')?.classList.add('hidden');
+document.querySelector('.app')?.classList.remove('hidden');
 $('panel-app')?.classList.remove('hidden');
 // --- /UNGATE ---
 // Get profile -> site, auto-create if missing using user_metadata
@@ -664,8 +707,8 @@ $('panel-app')?.classList.remove('hidden');
           S.profile = { site_id: metaSite, full_name: metaName, role: 'admin' };
           S.siteId = metaSite;
           $('site').textContent = `Site ${S.siteId}`;
-          
-          
+          document.getElementById('loginPage')?.classList.add('hidden');
+          document.querySelector('.app')?.classList.remove('hidden');
           $('panel-app')?.classList.remove('hidden');
           await refreshAll();
           toast('Using metadata profile (profiles locked by RLS)');
@@ -703,8 +746,8 @@ $('panel-app')?.classList.remove('hidden');
       if(!profileRow){ $('site').textContent='No profile/site'; toast('No profile found — ask admin to assign your site.'); return; }
       S.profile = profileRow; S.siteId = S.profile.site_id;
       $('site').textContent = `Site ${S.siteId}`;
-      
-      
+      document.getElementById('loginPage')?.classList.add('hidden');
+      document.querySelector('.app')?.classList.remove('hidden');
       $('panel-app')?.classList.remove('hidden');
       await refreshAll();
     }
@@ -1128,8 +1171,8 @@ $('panel-app')?.classList.remove('hidden');
 
     function setLpAuthMode(mode){
       lpAuthMode = mode;
-      const link  = 
-      const title = 
+      const link  = document.getElementById('lpSignupLink');
+      const title = document.getElementById('lpTitle');
       if(mode==='signup'){
         if(link)  link.textContent  = 'Have an account? Sign in';
         if(title) title.textContent = 'Create an account';
@@ -1181,8 +1224,9 @@ $('panel-app')?.classList.remove('hidden');
 
         // Race with a soft timeout to surface hangs
         const timeout = new Promise((_,rej)=> setTimeout(()=> rej(new Error('Auth request timed out (15s)')),15000));
-        const signInPromise = 
-const { data, error } = await Promise.race([signInPromise, timeout]);
+        const signInPromise = sb.auth.signInWithPassword({ email, password });
+
+        const { data, error } = await Promise.race([signInPromise, timeout]);
 
         logDebug("Supabase responded.");
         if(error){
@@ -1193,12 +1237,12 @@ const { data, error } = await Promise.race([signInPromise, timeout]);
         logDebug('Session received: ' + (!!data?.session));
         // --- Begin session persistence and polling ---
         // Supabase will persist the session to sessionStorage automatically now.
-        logDebug('Session will persist automatically (sessionStorage).');
+        logDebug('Session will persist automatically (localStorage).');
         // Poll for session (handles rare timing where getSession lags signIn)
         let tries = 0; let sessOk = false;
         while(tries < 8){
-          const sNow = await 
-if(sNow?.data?.session){ sessOk = true; break; }
+          const sNow = await sb.auth.getSession();
+          if(sNow?.data?.session){ sessOk = true; break; }
           await new Promise(r=>setTimeout(r, 100));
           tries++;
         }
@@ -1222,8 +1266,14 @@ if(sNow?.data?.session){ sessOk = true; break; }
       const site_id = Number(($('lpSiteSelect')?.value) || 1);
       if(!email || !password){ $('lpMsg').textContent = 'Email and password required.'; return; }
       $('lpMsg').textContent = 'Creating account…';
-      const { data, error } = await 
-if(error){ $('lpMsg').textContent = error.message; return; }
+      const { data, error } = await sb.auth.signUp({
+        email, password,
+        options: {
+          data: { site_id, full_name },
+          emailRedirectTo: location.origin + location.pathname + '#confirmed=1'
+        }
+      });
+      if(error){ $('lpMsg').textContent = error.message; return; }
       // Try to create profile (ignore errors if policies block it until confirmation)
       try{
         const userId = data?.user?.id;
@@ -1267,25 +1317,25 @@ if(error){ $('lpMsg').textContent = error.message; return; }
         if(lpAuthMode==='signup' && lpSignupStep===2) $('lpSignIn2').click(); else $('lpSignIn').click();
       }
     });
-     setLpAuthMode(lpAuthMode==='login' ? 'signup' : 'login');
+    document.getElementById('lpSignupLink').addEventListener('click', (e)=>{
+      e.preventDefault(); setLpAuthMode(lpAuthMode==='login' ? 'signup' : 'login');
     });
-     alert('Password reset coming soon.'); });
+    document.getElementById('lpForgotLink').addEventListener('click', (e)=>{ e.preventDefault(); alert('Password reset coming soon.'); });
 
     $('btnLogout').addEventListener('click', async ()=>{
       try{
-        const { error } = await 
-if(error){
+        const { error } = await sb.auth.signOut({ scope: 'global' });
+        if(error){
           // Fallback to local-only sign out so the tab is cleared even if network fails
-          await 
-}
+          await sb.auth.signOut({ scope: 'local' });
+        }
       }catch(_){
-        try{ await 
-}catch(__){}
+        try{ await sb.auth.signOut({ scope: 'local' }); }catch(__){}
       }finally{
         // Reset UI and show the standalone login page
         S.user = null; S.profile = null; S.siteId = null;
-        
-        
+        document.querySelector('.app')?.classList.add('hidden');
+        document.getElementById('loginPage')?.classList.remove('hidden');
         document.getElementById('who').textContent = 'Not signed in';
         document.getElementById('site').textContent = '—';
       }
@@ -1743,26 +1793,4 @@ if(error){
 </script><truncated__content/>
 </script>
 
-  <pre id="debugBox" class="hidden" style="position:fixed;right:12px;bottom:12px;width:36vw;max-width:520px;height:28vh;overflow:auto;padding:8px 10px;background:#0f1216;border:1px solid var(--line);border-radius:8px;white-space:pre-wrap"></pre><script>
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    
-
-
-// Minimal session restore to keep user logged in across refresh/close.
-async function ensureSession() {
-  try {
-    const { data: { session } } = await sb.auth.getSession();
-    window.currentUser = session ? session.user : null;
-    // No UI gating here; app always visible. You can conditionally enable features based on currentUser.
-  } catch (e) {
-    console.warn('Session restore failed', e);
-  }
-}
-(function initPersistentAuth(){
-  // Handle redirect flows if present (will no-op if not on a redirect URL)
-  try { if (typeof handleAuthRedirect === 'function') { handleAuthRedirect(); } } catch(_) {}
-  ensureSession();
-})();
-
-</script>
+  <pre id="debugBox" class="hidden" style="position:fixed;right:12px;bottom:12px;width:36vw;max-width:520px;height:28vh;overflow:auto;padding:8px 10px;background:#0f1216;border:1px solid var(--line);border-radius:8px;white-space:pre-wrap"></pre>
