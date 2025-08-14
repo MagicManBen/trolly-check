@@ -510,8 +510,11 @@
     const SB_STORAGE = getSafeStorage();
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
-        // Persist session using chosen storage (prefers localStorage; falls back to sessionStorage).
-        \1
+        // Persist within this tab (sessionStorage). Survives refresh; clears on tab close.
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storage: SB_STORAGE
       }
     });
     logDebug('Auth persistence: sessionStorage (survives refresh, clears on tab close)');
@@ -1205,13 +1208,7 @@ if(document.readyState === 'loading'){
         logDebug('Warning: Page loaded via file:// — some browsers (e.g., Safari) restrict auth/storage for the null origin. Running from http://localhost is recommended.');
       }
 
-      // Proactively clear any stale local session to avoid blocked second logins
-      try{
-        await sb.auth.signOut({ scope: 'local' });
-        logDebug('Cleared local session before sign-in.');
-      }catch(_){ /* ignore */ }
-
-      $('lpMsg').textContent = 'Signing in…';
+            $('lpMsg').textContent = 'Signing in…';
 
       // Show progress ticks if network hangs
       let tick = 0; let tickTimer = setInterval(()=>{
