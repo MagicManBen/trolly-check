@@ -10,70 +10,25 @@
   function logDebug(msg){
     const box = document.getElementById('debugBox');
     const time = new Date().toLocaleTimeString();
-    const line = `[${time}] ${msg}`;
-    if (box) box.textContent += (box.textContent ? "\n" : "") + line;
-    // Persist full history to storage so it survives navigation/reload
-    try{
-      const KEY = 'cqc_debug_log';
-      // Prefer localStorage; fall back to sessionStorage if needed
-      const store = (function(){
-        try{ const k='__t'; localStorage.setItem(k,'1'); localStorage.removeItem(k); return localStorage; }catch(_){}
-        try{ const k='__t'; sessionStorage.setItem(k,'1'); sessionStorage.removeItem(k); return sessionStorage; }catch(_){}
-        return null;
-      })();
-      if(store){
-        const prev = store.getItem(KEY) || '';
-        store.setItem(KEY, prev ? prev + '\n' + line : line);
-      }
-    }catch(_){ /* ignore storage errors */ }
+    if (box) box.textContent += `\n[${time}] ${msg}`;
   }
   // Global error handlers to surface hidden errors in debugBox
   window.addEventListener('error', (e)=>{ try{ logDebug('Window error: '+ (e?.message||e?.error?.toString()||'unknown')); }catch(_){} });
   window.addEventListener('unhandledrejection', (e)=>{ try{ logDebug('Unhandled promise rejection: ' + (e?.reason?.message||e?.reason||'unknown')); }catch(_){} });
-
-  // Load persisted debug log into the box on startup
-  function initDebugFromStorage(){
-    try{
-      const box = document.getElementById('debugBox');
-      if(!box) return;
-      const KEY = 'cqc_debug_log';
-      let text = '';
-      try{ text = localStorage.getItem(KEY) || ''; }catch(_){ }
-      if(!text){ try{ text = sessionStorage.getItem(KEY) || ''; }catch(_){ }
-      }
-      if(text) box.textContent = text;
-    }catch(_){ /* ignore */ }
-  }
-
-  // Copy button handler
-  function setupCopyDebugButton(){
-    const btn = document.getElementById('copyDebug');
-    if(!btn) return;
-    btn.addEventListener('click', async ()=>{
-      try{
-        const box = document.getElementById('debugBox');
-        const text = (box && box.textContent) ? box.textContent : '';
-        await navigator.clipboard.writeText(text);
-        try{ if(typeof toast==='function') toast('Debug log copied'); }catch(_){ }
-      }catch(err){
-        alert('Copy failed: ' + (err?.message||err));
-      }
-    });
-  }
-
   (function(){
     // Allow manual override with ?noipad in the URL
     if (new URLSearchParams(location.search).has('noipad')) return;
 
     // Detect iPad:
+    // 1) Older iPads include "iPad" in the user agent
+    // 2) iPadOS 13+ reports as "Mac" but has touch support
     const ua = navigator.userAgent || navigator.vendor || window.opera;
     const isIpadUA = /\biPad\b/i.test(ua);
     const isIpadOS = (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-    // If we're on an iPad and not already on the iPad page, redirect (preserve ? and #)
-    if ((isIpadUA || isIpadOS) && !/indexipad\.html$/i.test(location.pathname)) {
-      const suffix = location.search + location.hash;
-      location.replace('indexipad.html' + suffix);
+    // If we're on an iPad and not already on the iPad page, redirect
+    if ((isIpadUA || isIpadOS) && !/indexIpad\.html$/i.test(location.pathname)) {
+      location.replace('indexipad.html');
     }
   })();
   </script>
@@ -222,14 +177,6 @@
   <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
 </head>
 <body>
-  <!-- Debug box (dev only) -->
-  <div id="debugWrap" style="position:fixed;right:8px;bottom:8px;width:360px;z-index:2000">
-    <div id="debugTools" style="display:flex;justify-content:flex-end;margin-bottom:6px">
-      <button id="copyDebug" class="btn small" style="background:#0f1216;border:1px solid #2a2f36;color:#e8eaed;border-radius:8px;padding:6px 10px;cursor:pointer">Copy log</button>
-    </div>
-    <div id="debugBox" style="max-height:40vh;overflow:auto;font:12px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;background:#0b0d10;border:1px solid #2a2f36;color:#aab2bd;border-radius:8px;padding:8px;white-space:pre-wrap"></div>
-  </div>
-
   <div id="loginPage" class="login-page">
     <div class="login-card">
       <div class="login-brand">CQC Admin</div>
@@ -255,7 +202,6 @@
       </div>
     </div>
   </div>
-
   <div class="app hidden">
     <aside class="sidebar">
       <div class="brand">CQC Admin</div>
@@ -277,6 +223,8 @@
     </aside>
 
     <main class="main">
+      <!-- LOGIN PANEL -->
+      <!-- MAIN APP PANEL -->
       <div id="panel-app" class="hidden">
         <div class="topbar">
           <div class="pill">Admin</div>
@@ -389,6 +337,7 @@
 
         <!-- ITEMS CONFIGURATOR -->
         <section id="tab-items" class="hidden">
+          <!-- ITEM PICKER FULL WIDTH -->
           <div class="card">
             <h3>Find & select an item</h3>
             <div class="row" style="margin-bottom:10px">
@@ -440,11 +389,13 @@
                       <span class="muted">Owner will be stored until we add first‑class support.</span>
                     </div>
                   </div>
+
                 </div>
               </div>
             </div>
           </div>
 
+          <!-- OPTIONAL: legacy add/update + CSV import remain below for now -->
         </section>
 
         <!-- TEAMS -->
@@ -468,7 +419,6 @@
             </div>
           </div>
         </section>
-
         <!-- STAFF -->
         <section id="tab-staff" class="hidden">
           <div class="card">
@@ -537,44 +487,43 @@
     // ====== CONFIG ======
     const SUPABASE_URL = "https://unveoqnlqnobufhublyw.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVudmVvcW5scW5vYnVmaHVibHl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwMTcyNzYsImV4cCI6MjA3MDU5MzI3Nn0.g93OsXDpO3V9DToU7s-Z3SwBBnB84rBv0JMv-idgSME";
-
-    // Choose a safe storage (fallback if localStorage/sessionStorage is blocked)
+    // Choose a safe storage (prefer localStorage for 'stay signed in'; fallback if blocked, e.g., Safari file://)
     function getSafeStorage(){
-      // Prefer localStorage everywhere if available (more reload‑friendly)
+      // Prefer localStorage so users stay signed in across tab closes and restarts.
       try{
         const k='__sb_test__';
         window.localStorage.setItem(k,'1');
         window.localStorage.removeItem(k);
         return window.localStorage;
-      }catch(_){}
-      // Fallback to sessionStorage
-      try{
-        const k='__sb_test__';
-        window.sessionStorage.setItem(k,'1');
-        window.sessionStorage.removeItem(k);
-        return window.sessionStorage;
-      }catch(_){}
-      // Last resort no-op storage (prevents crashes)
-      return { getItem(){return null;}, setItem(){}, removeItem(){} };
-    }
-
-    // Compute the Supabase auth storage key (matches supabase-js v2)
-    function getAuthStorageKey(){
-      try{
-        const host = new URL(SUPABASE_URL).host; // e.g., unveoqnlqnobufhublyw.supabase.co
-        const projectRef = host.split('.')[0];
-        return `sb-${projectRef}-auth-token`;
       }catch(_){
-        return null;
+        try{
+          const k='__sb_test__';
+          window.sessionStorage.setItem(k,'1');
+          window.sessionStorage.removeItem(k);
+          return window.sessionStorage;
+        }catch(__){
+          return { getItem(){return null;}, setItem(){}, removeItem(){} };
+        }
       }
     }
-
     const SB_STORAGE = getSafeStorage();
-    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    logDebug('Supabase client: using default auth persistence');
-    logDebug('Auth persistence: ' + (SB_STORAGE === window.localStorage ? 'localStorage' :
-                                     SB_STORAGE === window.sessionStorage ? 'sessionStorage' : 'custom'));
-
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        // Persist within this tab (sessionStorage). Survives refresh; clears on tab close.
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storage: SB_STORAGE
+      }
+    });
+    try{
+      const which = (SB_STORAGE === window.localStorage)
+        ? 'localStorage (persists across closes/restarts)'
+        : (SB_STORAGE === window.sessionStorage)
+          ? 'sessionStorage (survives refresh, clears on tab close)'
+          : 'in-memory (no persistence)';
+      logDebug('Auth persistence: ' + which);
+    }catch(_){ logDebug('Auth persistence: (unknown storage)'); }
     // Connectivity test helper
     async function checkSupabaseConnectivity(){
       try{
@@ -587,9 +536,8 @@
         return false;
       }
     }
-
-    // Handle email-confirmation / magic-link redirects (tokens in the URL hash)
-    async function handleAuthRedirect(){
+// Handle email-confirmation / magic-link redirects (tokens in the URL hash)
+async function handleAuthRedirect(){
       try{
         const hash = window.location.hash || '';
         const hasTokens = hash.includes('access_token') && hash.includes('refresh_token');
@@ -620,104 +568,31 @@
           history.replaceState({}, document.title, location.pathname);
         }
       }catch(_){ /* ignore */ }
-    }
-
-    // Keep UI in sync when auth state changes, but avoid forcing SIGNED_OUT on boot
-    sb.auth.onAuthStateChange(async (event, session) => {
-      logDebug('onAuthStateChange: ' + event + ' (hasSession=' + Boolean(session) + ')');
-      if(event === 'SIGNED_IN'){ __authEventTimes.signedIn = Date.now(); }
-      if(event === 'TOKEN_REFRESHED'){ __authEventTimes.tokenRefreshed = Date.now(); }
-
-if((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session){
-  // Optimistically reveal app UI immediately; init() will finish wiring data
-  document.getElementById('loginPage')?.classList.add('hidden');
-  document.querySelector('.app')?.classList.remove('hidden');
 }
-      if(event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED'){
-        await init();
-      }
-      // Do not auto-hide on SIGNED_OUT here; init() decides.
-    });
 
-    // Give supabase-js time to hydrate session on full reload
-    async function waitForHydration(maxMs = 1500){
-      const started = performance.now();
-      while (performance.now() - started < maxMs) {
-        const { data: { session } } = await sb.auth.getSession();
-        if (session) return session;
-        await new Promise(r => setTimeout(r, 100));
-      }
-      return null;
-    }
-
-    // Rescue session from either storage if needed
-    async function rescueSessionFromAnyStorage(){
-      const key = getAuthStorageKey();
-      if(!key) return false;
-      const stores = [SB_STORAGE, window.localStorage, window.sessionStorage]
-        .filter(Boolean)
-        .filter((v,i,self)=> self.indexOf(v) === i);
-      for (const store of stores){
-        try{
-          const raw = typeof store.getItem === 'function' ? store.getItem(key) : null;
-          if(!raw) continue;
-          const parsed = JSON.parse(raw);
-          const cur = parsed?.currentSession || parsed?.session || null;
-          const access_token  = cur?.access_token  || cur?.accessToken  || null;
-          const refresh_token = cur?.refresh_token || cur?.refreshToken || null;
-          if(access_token && refresh_token){
-            const { data, error } = await sb.auth.setSession({ access_token, refresh_token });
-            if(error){ logDebug('setSession failed while rescuing: ' + (error.message||error)); continue; }
-            if(data?.session){
-              logDebug('Rescued session from ' + (store === window.localStorage ? 'localStorage' :
-                                                  store === window.sessionStorage ? 'sessionStorage' : 'custom'));
-              return true;
-            }
-          }
-        }catch(err){ logDebug('rescueSession error: ' + (err?.message||err)); }
-      }
-      return false;
-    }
-
-    // Wait for a one-off SIGNED_IN event (used to resolve login even if signInWithPassword promise hangs)
-    function waitForSignedInOnce(maxMs = 15000){
-      return new Promise((resolve, reject)=>{
-        let cleaned = false;
-        const cleanup = (sub)=>{
-          if(cleaned) return; cleaned = true;
-          try{ sub?.subscription?.unsubscribe?.(); }catch(_){ }
-        };
-        const timer = setTimeout(()=>{
-          cleanup(sub);
-          reject(new Error('SIGNED_IN event not observed in time'));
-        }, maxMs);
-        const { data: sub } = sb.auth.onAuthStateChange((event, session)=>{
-          if(event === 'SIGNED_IN' && session){
-            clearTimeout(timer);
-            cleanup(sub);
-            resolve(session);
-          }
-        });
-      });
-    }
-
-    function __boot(){
-      initDebugFromStorage();
-      setupCopyDebugButton();
-      logDebug('Booting… protocol='+location.protocol+' href='+location.href);
-      (async()=>{
-        try{
-          await handleAuthRedirect();
-        }catch(_){ /* ignore */ }
-        await init();
-      })();
-    }
-    if(document.readyState === 'loading'){
-      window.addEventListener('DOMContentLoaded', __boot);
-    }else{
-      __boot();
-    }
-
+// Keep UI in sync when auth state changes (e.g., right after confirm-email redirect)
+sb.auth.onAuthStateChange(async (event) => {
+  if(event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED'){
+    await init();
+  }
+  if(event === 'SIGNED_OUT'){
+    document.querySelector('.app')?.classList.add('hidden');
+    document.getElementById('loginPage')?.classList.remove('hidden');
+  }
+});
+function __boot(){
+  logDebug('Booting… protocol='+location.protocol+' href='+location.href);
+  try{
+    handleAuthRedirect().then(()=> init());
+  }catch(_){
+    try{ init(); }catch(__){}
+  }
+}
+if(document.readyState === 'loading'){
+  window.addEventListener('DOMContentLoaded', __boot);
+}else{
+  __boot();
+}
     // ====== STATE ======
     const S = {
       user: null, profile: null, siteId: null,
@@ -787,6 +662,8 @@ if((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session){
     }
 
     function isPinSet(v){
+      // Treat PIN as set when the plain pin column has a non-empty value
+      // and is not the placeholder string 'EMPTY'.
       return typeof v === 'string' && v.trim() !== '' && v.trim().toUpperCase() !== 'EMPTY';
     }
 
@@ -811,103 +688,78 @@ if((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session){
     function closeRoomItemsModal(){ const m=$('roomItemsModal'); if(m) m.classList.add('hidden'); }
 
     // ====== INIT & AUTH ======
-let __authEventTimes = { signedIn: 0, tokenRefreshed: 0 };
-    let __initPromise = null;
     async function init(){
-      if(__initPromise){ logDebug('init(): already running; reusing'); return __initPromise; }
-      __initPromise = (async()=>{
-        logDebug('init(): fetching session…');
-
-        const appEl = document.querySelector('.app');
-        const loginEl = document.getElementById('loginPage');
-
-        // 0) Give supabase-js a moment to hydrate from storage
-        let { data: { session } } = await sb.auth.getSession();
-        if (!session) {
-          const hydrated = await waitForHydration(1500);
-          if (hydrated) session = hydrated;
-          logDebug('After hydration wait: hasSession=' + Boolean(session));
-        }
-        // 1) if still missing, try to rescue from any storage and THEN update `session`
-        if (!session) {
-          const rescued = await rescueSessionFromAnyStorage();
-          if (rescued) ({ data: { session } } = await sb.auth.getSession());
-        }
-        // 2) proceed based on the UPDATED `session`
-        if (!session) {
-          appEl?.classList.add('hidden');
-          loginEl?.classList.remove('hidden');
-          const btn = document.getElementById('lpSignIn'); if (btn) btn.disabled = false;
-          populateSiteSelect();
+      logDebug('init(): fetching session…');
+      const { data:{ session } } = await sb.auth.getSession();
+      logDebug('init(): session present? ' + Boolean(session));
+      if(!session){
+        document.querySelector('.app')?.classList.add('hidden');
+        document.getElementById('loginPage')?.classList.remove('hidden');
+        populateSiteSelect();
+        return;
+      }
+      S.user = session.user;
+      $('who').textContent = S.user.email || 'Signed in';
+      // Get profile -> site, auto-create if missing using user_metadata
+      const { data: prof, error } = await sb
+        .from('profiles')
+        .select('site_id, full_name, role')
+        .eq('user_id', S.user.id)
+        .limit(1);
+      if(error){
+        logDebug('profiles select error: ' + (error?.message||error));
+        // Fallback to user metadata when RLS blocks profiles or table is missing
+        const meta = (S.user && S.user.user_metadata) || {};
+        const metaSite = Number(meta.site_id)||null;
+        const metaName = meta.full_name || null;
+        if(metaSite){
+          logDebug('Using metadata fallback for site: ' + metaSite);
+          S.profile = { site_id: metaSite, full_name: metaName, role: 'admin' };
+          S.siteId = metaSite;
+          $('site').textContent = `Site ${S.siteId}`;
+          document.getElementById('loginPage')?.classList.add('hidden');
+          document.querySelector('.app')?.classList.remove('hidden');
+          $('panel-app')?.classList.remove('hidden');
+          await refreshAll();
+          toast('Using metadata profile (profiles locked by RLS)');
           return;
         }
+        toast(error.message);
+        return;
+      }
 
-        // --- App boot after session present ---
-        S.user = session.user;
-        $('who').textContent = S.user.email || 'Signed in';
-
-        // Get profile → site, auto-create if missing using user_metadata
-        const { data: prof, error } = await sb
-          .from('profiles')
-          .select('site_id, full_name, role')
-          .eq('user_id', S.user.id)
-          .limit(1);
-
-        if(error){
-          logDebug('profiles select error: ' + (error?.message||error));
-          // Fallback to user metadata when RLS blocks profiles or table is missing
-          const meta = (S.user && S.user.user_metadata) || {};
-          const metaSite = Number(meta.site_id)||null;
-          const metaName = meta.full_name || null;
-          if(metaSite){
-            logDebug('Using metadata fallback for site: ' + metaSite);
-            S.profile = { site_id: metaSite, full_name: metaName, role: 'admin' };
-            S.siteId = metaSite;
-            $('site').textContent = `Site ${S.siteId}`;
-            document.getElementById('loginPage')?.classList.add('hidden');
-            document.querySelector('.app')?.classList.remove('hidden');
-            $('panel-app')?.classList.remove('hidden');
-            await refreshAll();
-            toast('Using metadata profile (profiles locked by RLS)');
-            return;
-          }
-          toast(error.message);
-          return;
-        }
-
-        let profileRow = (prof && prof[0]) || null;
-        if(!profileRow){
-          logDebug('No profile found from select; attempting metadata/auto-create path');
-          const meta = (S.user && S.user.user_metadata) || {};
-          const metaSite = Number(meta.site_id)||null;
-          const metaName = meta.full_name || null;
-          if(metaSite){
-            const { error: insErr } = await sb.from('profiles').insert({
-              user_id: S.user.id,
-              site_id: metaSite,
-              full_name: metaName,
-              role: 'admin'
-            });
-            if(!insErr){
-              const { data: prof2 } = await sb
-                .from('profiles')
-                .select('site_id, full_name, role')
-                .eq('user_id', S.user.id)
-                .limit(1);
-              profileRow = (prof2 && prof2[0]) || null;
-            }
+      let profileRow = (prof && prof[0]) || null;
+      if(!profileRow){
+        logDebug('No profile found from select; attempting metadata/auto-create path');
+        // First login after email confirmation on a different device:
+        // use metadata captured at sign-up to create the profile now.
+        const meta = (S.user && S.user.user_metadata) || {};
+        const metaSite = Number(meta.site_id)||null;
+        const metaName = meta.full_name || null;
+        if(metaSite){
+          const { error: insErr } = await sb.from('profiles').insert({
+            user_id: S.user.id,
+            site_id: metaSite,
+            full_name: metaName,
+            role: 'admin'
+          });
+          if(!insErr){
+            const { data: prof2 } = await sb
+              .from('profiles')
+              .select('site_id, full_name, role')
+              .eq('user_id', S.user.id)
+              .limit(1);
+            profileRow = (prof2 && prof2[0]) || null;
           }
         }
-        if(!profileRow){ $('site').textContent='No profile/site'; toast('No profile found — ask admin to assign your site.'); return; }
-
-        S.profile = profileRow; S.siteId = S.profile.site_id;
-        $('site').textContent = `Site ${S.siteId}`;
-        document.getElementById('loginPage')?.classList.add('hidden');
-        document.querySelector('.app')?.classList.remove('hidden');
-        $('panel-app')?.classList.remove('hidden');
-        await refreshAll();
-      })().finally(()=>{ __initPromise = null; });
-      return __initPromise;
+      }
+      if(!profileRow){ $('site').textContent='No profile/site'; toast('No profile found — ask admin to assign your site.'); return; }
+      S.profile = profileRow; S.siteId = S.profile.site_id;
+      $('site').textContent = `Site ${S.siteId}`;
+      document.getElementById('loginPage')?.classList.add('hidden');
+      document.querySelector('.app')?.classList.remove('hidden');
+      $('panel-app')?.classList.remove('hidden');
+      await refreshAll();
     }
 
     async function refreshAll(){
@@ -922,7 +774,6 @@ let __authEventTimes = { signedIn: 0, tokenRefreshed: 0 };
       renderRooms(); renderTypes(); renderItems(); renderStaff(); renderTeams(); renderAudits(); renderDashboard();
       updateKPIs();
     }
-
     async function loadCheckStatus(){
       const { data, error } = await sb.from('v_item_check_status')
         .select('*').eq('site_id', S.siteId);
@@ -978,8 +829,10 @@ let __authEventTimes = { signedIn: 0, tokenRefreshed: 0 };
       requestAnimationFrame(step);
     }
     function renderDashboard(){
+      // summary badges
       const byStatus = Object.fromEntries(S.dashSummary.map(r => [r.status, r.count]));
       const ok = byStatus.ok||0, soon = byStatus.due_soon||0, late = byStatus.overdue||0, uns = byStatus.unscheduled||0;
+      // progress ring considers only scheduled items
       const scheduled = ok + soon + late;
       const pct = scheduled ? Math.round((ok / scheduled) * 100) : 0;
       setRingAnimated(pct);
@@ -999,6 +852,7 @@ let __authEventTimes = { signedIn: 0, tokenRefreshed: 0 };
       animateNumber($('statLate'), late);
       animateNumber($('statUnsch'), uns);
 
+      // partition lists
       const todayStart = new Date(); todayStart.setHours(0,0,0,0);
       const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
 
@@ -1006,7 +860,7 @@ let __authEventTimes = { signedIn: 0, tokenRefreshed: 0 };
         .sort((a,b)=> new Date(a.next_due_at) - new Date(b.next_due_at));
       const dueSoon = S.dashStatus.filter(x => x.status === 'due_soon' && new Date(x.next_due_at) > todayEnd)
         .sort((a,b)=> new Date(a.next_due_at) - new Date(b.next_due_at))
-        .filter(x => (new Date(x.next_due_at) - todayEnd) <= 7*86400000);
+        .filter(x => (new Date(x.next_due_at) - todayEnd) <= 7*86400000); // next 7 days
       const dueToday = S.dashStatus.filter(x => {
         const d = new Date(x.next_due_at);
         return d >= todayStart && d <= todayEnd && (x.status === 'due_soon' || x.status === 'overdue');
@@ -1212,8 +1066,9 @@ let __authEventTimes = { signedIn: 0, tokenRefreshed: 0 };
         tb.appendChild(tr);
       }
     }
-
+    // Configurator helpers/renderers
     function fillOwnerRoles(){
+      // Now shows TEAMS instead of roles
       const sel=$('cfgOwnerRole'); if(!sel) return; sel.innerHTML='';
       const mk=(v,l)=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; sel.appendChild(o); };
       mk('','(none)');
@@ -1226,6 +1081,7 @@ let __authEventTimes = { signedIn: 0, tokenRefreshed: 0 };
       const sorted=[...S.rooms].sort((a,b)=>a.name.localeCompare(b.name));
       if(sorted.length===0) mk('', '(no rooms yet)'); else sorted.forEach(r=>mk(r.id,r.name));
     }
+    // (plan-related functions removed)
 
     function renderStaff(){
       const tb=$('staffBody'); tb.innerHTML='';
@@ -1277,6 +1133,7 @@ let __authEventTimes = { signedIn: 0, tokenRefreshed: 0 };
 
     async function populateSiteSelect(){
       const sel = $('lpSiteSelect'); if(!sel) return;
+      // Always refresh the list
       sel.innerHTML = '<option value="">Loading sites…</option>';
       sel.disabled = true;
       const { data, error } = await sb.from('sites').select('id,name').order('name');
@@ -1349,7 +1206,6 @@ let __authEventTimes = { signedIn: 0, tokenRefreshed: 0 };
       if(!email || !password){
         $('lpMsg').textContent = 'Enter email and password.';
         logDebug("Missing email or password.");
-        $('lpSignIn')?.removeAttribute('disabled');
         return;
       }
 
@@ -1357,123 +1213,47 @@ let __authEventTimes = { signedIn: 0, tokenRefreshed: 0 };
       if(onFileProtocol){
         logDebug('Warning: Page loaded via file:// — some browsers (e.g., Safari) restrict auth/storage for the null origin. Running from http://localhost is recommended.');
       }
-      logDebug('Storage in use: ' + (SB_STORAGE === window.localStorage ? 'localStorage' : SB_STORAGE === window.sessionStorage ? 'sessionStorage' : 'custom') + ' • key=' + (getAuthStorageKey() || '(none)'));
 
-// Guard against duplicate sign-in immediately after a SIGNED_IN event on reload
-if (typeof __authEventTimes !== 'undefined') {
-  const sinceSignedInMs = Date.now() - (__authEventTimes.signedIn || 0);
-  if (sinceSignedInMs < 8000) {
-    logDebug('Skipping duplicate sign-in; recent SIGNED_IN detected ' + sinceSignedInMs + 'ms ago.');
-    $('lpMsg').textContent = '';
-    await init();
-    return;
-  }
-}
-
-      // If a session already exists, don't clear it — just initialise the app
-      logDebug('Checking for existing session before sign-in...');
-
-// If we very recently saw a SIGNED_IN event, skip another grant
-if (typeof __authEventTimes !== 'undefined' && (Date.now() - (__authEventTimes.signedIn || 0) < 8000)) {
-  logDebug('Recent SIGNED_IN (<=8s) detected; running init() instead of sign-in.');
-  await init();
-  return;
-}
-// Try a quick rescue from storage before attempting password grant
-try{
-  const key = getAuthStorageKey();
-  const raw = (key && (SB_STORAGE.getItem(key) || (window.localStorage && localStorage.getItem(key)) || (window.sessionStorage && sessionStorage.getItem(key)))) || null;
-  if(raw){
-    try{
-      const parsed = JSON.parse(raw);
-      const cur = parsed?.currentSession || parsed?.session || null;
-      const access_token  = cur?.access_token  || cur?.accessToken  || null;
-      const refresh_token = cur?.refresh_token || cur?.refreshToken || null;
-      if(access_token && refresh_token){
-        const { data: setData, error: setErr } = await sb.auth.setSession({ access_token, refresh_token });
-        if(!setErr && setData?.session){
-          logDebug('Rescued session from storage during pre-check; running init().');
-          await init();
-          return;
-        }
-      }
-    }catch(_){}
-  }
-}catch(_){}
+      // Proactively clear any stale local session to avoid blocked second logins
       try{
-        const withTimeout = Promise.race([
-          sb.auth.getSession(),
-          new Promise(res => setTimeout(()=> res({ data:{ session:null } }), 5000))
-        ]);
-        const { data: { session } } = await withTimeout;
-        if(session){
-          logDebug('Already signed in; running init() instead of sign-in.');
-          await init();
-          return;
-        }
-      }catch(err){
-        logDebug('getSession check failed: ' + (err?.message||err));
-      }
-      logDebug('No existing session; proceeding to password sign-in.');
+        await sb.auth.signOut({ scope: 'local' });
+        logDebug('Cleared local session before sign-in.');
+      }catch(_){ /* ignore */ }
 
       $('lpMsg').textContent = 'Signing in…';
 
       // Show progress ticks if network hangs
       let tick = 0; let tickTimer = setInterval(()=>{
         tick++; $('lpMsg').textContent = 'Signing in' + '.'.repeat((tick%3)+1);
-        if(tick===4){
-        if(typeof __authEventTimes !== 'undefined' && (Date.now() - (__authEventTimes.signedIn||0) < 6000)){
-          logDebug('SIGNED_IN event already received; waiting for SDK to settle…');
-        }else{
-          logDebug('Still waiting for Supabase… (network or CORS issue?)');
-        }
-      }
+        if(tick===4){ logDebug('Still waiting for Supabase… (network or CORS issue?)'); }
       }, 800);
 
       try {
-        logDebug("Sending credentials to Supabase...");
-
-        // Start sign-in and also listen for the SIGNED_IN event in case the promise hangs
-        const signInPromise = sb.auth.signInWithPassword({ email, password })
-          .then(r => ({ kind: 'signIn', result: r }))
-          .catch(err => ({ kind: 'signInErr', error: err }));
-        const eventPromise = waitForSignedInOnce(15000).then(() => ({ kind: 'event' }));
-        const overallTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error('Login timed out (20s)')), 20000));
-
-        let raced;
-        try{
-          raced = await Promise.race([signInPromise, eventPromise, overallTimeout]);
-        }catch(raceErr){
-          // If the race timed out, double-check session before failing
-          const { data: { session: sessAfter } } = await sb.auth.getSession();
-          if(sessAfter){
-            logDebug('Login race timed out, but session now exists; proceeding.');
-            $('lpMsg').textContent='';
-            await init();
-            logDebug('Init complete.');
-            return;
-          }
-          throw raceErr;
-        }
-
-        if(raced?.kind === 'signIn'){
-          logDebug('Supabase responded.');
-          const { data, error } = raced.result || {};
-          if(error){
-            logDebug('Supabase error: ' + JSON.stringify(error));
-            $('lpMsg').textContent = error.message || 'Login failed.';
-            $('lpSignIn')?.removeAttribute('disabled');
-            return;
-          }
-        } else if(raced?.kind === 'event'){
-          logDebug('Auth event SIGNED_IN received; proceeding.');
-        } else if(raced?.kind === 'signInErr'){
-          logDebug('Sign-in error: ' + (raced.error?.message||raced.error));
-          $('lpMsg').textContent = (raced.error && raced.error.message) ? raced.error.message : 'Login failed.';
-          $('lpSignIn')?.removeAttribute('disabled');
+        const reachable = await checkSupabaseConnectivity();
+        if(!reachable){
+          $('lpMsg').textContent = 'Cannot reach auth server. Check network / firewall.';
+          clearInterval(tickTimer);
           return;
         }
-        logDebug('Session received: ' + (!!(await sb.auth.getSession())?.data?.session));
+
+        logDebug("Sending credentials to Supabase...");
+
+        // Race with a soft timeout to surface hangs
+        const timeout = new Promise((_,rej)=> setTimeout(()=> rej(new Error('Auth request timed out (15s)')),15000));
+        const signInPromise = sb.auth.signInWithPassword({ email, password });
+
+        const { data, error } = await Promise.race([signInPromise, timeout]);
+
+        logDebug("Supabase responded.");
+        if(error){
+          logDebug("Supabase error: " + JSON.stringify(error));
+          $('lpMsg').textContent = error.message || 'Login failed.';
+          return;
+        }
+        logDebug('Session received: ' + (!!data?.session));
+        // --- Begin session persistence and polling ---
+        // Supabase will persist the session to sessionStorage automatically now.
+        logDebug('Session will persist automatically (sessionStorage).');
         // Poll for session (handles rare timing where getSession lags signIn)
         let tries = 0; let sessOk = false;
         while(tries < 8){
@@ -1483,6 +1263,7 @@ try{
           tries++;
         }
         logDebug('Post-login session available: ' + sessOk + ' after ' + tries + ' checks');
+        // --- End session persistence and polling ---
         $('lpMsg').textContent='';
         logDebug("Calling init()...");
         await init();
@@ -1490,9 +1271,7 @@ try{
       } catch (err) {
         logDebug("Unexpected error: " + (err?.message||err?.toString()||'unknown'));
         $('lpMsg').textContent = (err && err.message) ? err.message : 'Login failed (network).';
-        $('lpSignIn')?.removeAttribute('disabled');
       } finally {
-        $('lpSignIn')?.removeAttribute('disabled');
         clearInterval(tickTimer);
       }
     }
@@ -1511,6 +1290,7 @@ try{
         }
       });
       if(error){ $('lpMsg').textContent = error.message; return; }
+      // Try to create profile (ignore errors if policies block it until confirmation)
       try{
         const userId = data?.user?.id;
         if(userId){
@@ -1518,9 +1298,11 @@ try{
         }
       }catch(_){ /* ignore */ }
       if(data?.session){
+        // Signed in immediately
         $('lpMsg').textContent = 'Account created!';
         await init();
       }else{
+        // Email confirmation flow: stay here with a clear message, switch to login UI
         setLpAuthMode('login');
         $('lpMsg').textContent = `We sent a confirmation link to ${email}. Once confirmed, return here and sign in.`;
         const btn = $('lpSignIn'); if(btn) btn.textContent = 'Sign in';
@@ -1529,13 +1311,12 @@ try{
     }
 
     $('lpSignIn').addEventListener('click', async ()=>{
-      const btn = $('lpSignIn'); if(btn) btn.disabled = true; setTimeout(()=>{ if(btn) btn.disabled = false; }, 18000);
       if(lpAuthMode==='signup'){
         const email=$('lpEmail').value.trim();
         const password=$('lpPass').value;
         const siteId = $('lpSiteSelect')?.value || '';
-        if(!email || !password){ $('lpMsg').textContent='Enter email and password.'; if(btn) btn.disabled = false; return; }
-        if(!siteId){ $('lpMsg').textContent='Please select a site.'; if(btn) btn.disabled = false; return; }
+        if(!email || !password){ $('lpMsg').textContent='Enter email and password.'; return; }
+        if(!siteId){ $('lpMsg').textContent='Please select a site.'; return; }
         setSignupStep(2);
         $('lpMsg').textContent = 'Almost there — add your full name.';
         $('lpName')?.focus();
@@ -1561,11 +1342,13 @@ try{
       try{
         const { error } = await sb.auth.signOut({ scope: 'global' });
         if(error){
+          // Fallback to local-only sign out so the tab is cleared even if network fails
           await sb.auth.signOut({ scope: 'local' });
         }
       }catch(_){
         try{ await sb.auth.signOut({ scope: 'local' }); }catch(__){}
       }finally{
+        // Reset UI and show the standalone login page
         S.user = null; S.profile = null; S.siteId = null;
         document.querySelector('.app')?.classList.add('hidden');
         document.getElementById('loginPage')?.classList.remove('hidden');
@@ -1574,15 +1357,17 @@ try{
       }
     });
 
-    // Navigation & common
+    // Navigation
     document.querySelectorAll('.nav button[data-tab]').forEach(b=>b.addEventListener('click', ()=> setActiveTab(b.dataset.tab)));
     $('btnRefresh').addEventListener('click', refreshAll);
     $('globalSearch').addEventListener('input', ()=>{ renderItems(); renderAudits(); });
 
-    // Dashboard manage buttons
-    document.getElementById('tab-dashboard').addEventListener('click', (e)=>{
-      const b=e.target.closest('button[data-act="manageItem"]'); if(!b) return;
-      const code=b.dataset.code;
+    // Dashboard (quick adds removed) — guard in case old elements exist in cached HTML
+    const _qaAddRoom = $('qaAddRoom');
+    if(_qaAddRoom){ _qaAddRoom.addEventListener('click', ()=>{/* removed */}); }
+    const _qaAddStaff = $('qaAddStaff');
+    if(_qaAddStaff){ _qaAddStaff.addEventListener('click', ()=>{/* removed */}); }
+    function openItemInForm(code){
       const it=S.items.find(x=>x.item_id===code);
       if(!it){ toast('Item not found'); return; }
       setActiveTab('tab-items');
@@ -1591,6 +1376,7 @@ try{
       $('cfgCodeInput').value = it.item_id;
       $('cfgCodeInput').readOnly = true;
       $('cfgName').textContent = it.item_name || '';
+      // Reset Change button and input affordances
       const _btnEC = $('cfgEnableEditCode');
       if(_btnEC){
         _btnEC.textContent = 'Change';
@@ -1603,9 +1389,14 @@ try{
       if(it.room_name) $('cfgRoom').value = it.room_name;
       $('cfgOwnerRole').value = '';
       toast('Opened in configurator');
+    }
+    // Dashboard manage buttons
+    document.getElementById('tab-dashboard').addEventListener('click', (e)=>{
+      const b=e.target.closest('button[data-act="manageItem"]'); if(!b) return;
+      const code=b.dataset.code; openItemInForm(code);
     });
 
-    // Rooms tab actions
+    // Rooms tab
     $('addRoom').addEventListener('click', async ()=>{
       const name=$('roomName').value.trim(); if(!name) return;
       const { error } = await sb.from('rooms').insert({ site_id:S.siteId, name });
@@ -1618,8 +1409,10 @@ try{
       const tr = btn.closest('tr');
 
       if(act==='viewItems'){
+        // find room & items in that room
         const room = S.rooms.find(rr=>rr.id===id);
         const roomName = room?.name || btn.getAttribute('data-room-name') || 'Room';
+        // Use either room_id or fallback to string match
         const items = (S.items||[])
           .filter(it => (it.room_id === id) || (it.room_name === roomName))
           .map(it => it.item_name);
@@ -1632,6 +1425,7 @@ try{
         const text = tr.querySelector('.owner-text');
         const cancelBtn = tr.querySelector('button[data-act="cancelOwner"]');
 
+        // Enter edit mode
         if(btn.dataset.mode !== 'save'){
           btn.dataset.mode = 'save';
           btn.textContent = 'Save';
@@ -1644,6 +1438,7 @@ try{
           return;
         }
 
+        // Save mode
         const newOwner = sel.value ? Number(sel.value) : null;
         const { error } = await sb.from('rooms').update({ occupied_by: newOwner }).eq('id', id).eq('site_id', S.siteId);
         if(error){ toast(error.message); return; }
@@ -1717,6 +1512,7 @@ try{
       }
     });
     async function setTypeTeam(checkTypeId, teamId){
+      // clear existing mapping then set if provided
       const delRes = await sb.from('check_type_teams').delete()
         .eq('site_id', S.siteId).eq('check_type_id', checkTypeId);
       if(delRes.error){
@@ -1738,7 +1534,7 @@ try{
           toast(insRes.error.message); return;
         }
       }
-      await loadCheckTypeTeams(); buildTypeTeamMap(); renderTypes(); renderDashboard();
+      await loadCheckTypeTeams(); buildTypeTeamMap(); renderTypes(); renderPlan(); renderDashboard();
       toast('Team updated');
     }
     $('typesBody').addEventListener('change', async (e)=>{
@@ -1769,12 +1565,13 @@ try{
       if(act==='delTeam'){
         const id = Number(b.getAttribute('data-id'));
         if(!confirm('Delete this team?')) return;
+        // clean up mappings and members
         await sb.from('team_members').delete().eq('team_id', id).eq('site_id', S.siteId);
         await sb.from('check_type_teams').delete().eq('team_id', id).eq('site_id', S.siteId);
         const { error } = await sb.from('teams').delete().eq('id', id).eq('site_id', S.siteId);
         if(error) return toast(error.message);
         await Promise.all([loadTeams(), loadTeamMembers(), loadCheckTypeTeams()]);
-        buildTypeTeamMap(); renderTeams(); renderTypes(); renderDashboard(); toast('Team deleted');
+        buildTypeTeamMap(); renderTeams(); renderTypes(); renderPlan(); renderDashboard(); toast('Team deleted');
       }
       if(act==='addMember'){
         const teamId = Number(b.getAttribute('data-team'));
@@ -1829,6 +1626,7 @@ try{
         $('cfgCodeInput').value = it.item_id;
         $('cfgCodeInput').readOnly = true;
         $('cfgName').textContent = it.item_name || '';
+        // Reset Change button and input affordances
         const _btnEC = $('cfgEnableEditCode');
         if(_btnEC){
           _btnEC.textContent = 'Change';
@@ -1842,37 +1640,18 @@ try{
       }
     });
 
-    // Code edit toggle
-    $('cfgEnableEditCode').addEventListener('click', ()=>{
-      const btn = $('cfgEnableEditCode');
-      const input = $('cfgCodeInput');
-      if(btn.dataset.mode !== 'save'){
-        btn.dataset.mode = 'save';
-        btn.textContent = 'Save code';
-        btn.classList.add('save-glow');
-        input.readOnly = false;
-        input.classList.add('edit-pulse');
-        input.focus();
-        input.select();
-      }else{
-        input.readOnly = true;
-        btn.dataset.mode = 'change';
-        btn.textContent = 'Change';
-        btn.classList.remove('save-glow');
-        input.classList.remove('edit-pulse');
-        toast('Code staged (save details to persist).');
-      }
-    });
+
+
 
     // Save details (room + owner role)
     $('cfgSaveDetails').addEventListener('click', async ()=>{
       if(!S.selectedItem) return;
       const roomName = $('cfgRoom').value;
       const ownerRole = $('cfgOwnerRole').value;
-      const itemId = $('cfgCodeInput').value.trim();
+      // Save room via existing RPC
       const { error } = await sb.rpc('admin_upsert_item', {
         p_site_id: S.siteId,
-        p_item_id: itemId,
+        p_item_id: $('cfgCodeInput').value.trim(),
         p_item_name: S.selectedItem.item_name,
         p_room_name: roomName,
         p_category: S.selectedItem.category,
@@ -1881,10 +1660,11 @@ try{
       });
       if(error) return toast(error.message);
       await loadItems();
-      S.selectedItem = S.items.find(x=>x.item_id===itemId);
+      // refresh selected
+      S.selectedItem = S.items.find(x=>x.item_id===S.selectedItem.item_id);
       toast('Details saved');
     });
-    $('cfgClose').addEventListener('click', closeCfgModal);
+
 
     // Staff tab
     $('addStaff').addEventListener('click', async ()=>{
@@ -1892,66 +1672,141 @@ try{
       if(!full_name) return;
       const { error } = await sb.from('kiosk_users').insert({ site_id:S.siteId, full_name, role });
       if(error) return toast(error.message);
-      $('staffName').value='';
-      await loadStaff(); renderStaff(); updateKPIs(); toast('Staff added');
+      $('staffName').value=''; await loadStaff(); renderStaff(); updateKPIs(); toast('Staff added');
     });
     $('staffBody').addEventListener('click', async (e)=>{
       const b=e.target.closest('button'); if(!b) return;
-      const id = Number(b.dataset.id); const act = b.dataset.act;
+      const id=Number(b.dataset.id), act=b.dataset.act;
       if(act==='setPin'){
-        const pin = prompt('Enter new PIN (4-6 digits)'); if(pin===null) return;
-        if(!/^\d{4,6}$/.test(pin)){ toast('PIN must be 4–6 digits'); return; }
-        const { error } = await sb.from('kiosk_users').update({ pin }).eq('id', id).eq('site_id', S.siteId);
+        const p = prompt('Enter new 4-digit PIN'); if(!p) return;
+        const { error } = await sb.rpc('set_kiosk_user_pin', { p_user_id:id, p_site_id:S.siteId, p_pin:p });
         if(error) return toast(error.message);
-        await loadStaff(); renderStaff(); toast('PIN updated');
+        // Also persist the plain PIN so the UI (which reads the plain column) stays in sync
+        await sb.from('kiosk_users').update({ pin: p }).eq('id', id).eq('site_id', S.siteId);
+        await loadStaff(); renderStaff(); toast('PIN set');
       }
       if(act==='renameStaff'){
-        const row = S.staff.find(s=>s.id===id);
-        const name = prompt('New name', row?.full_name||''); if(!name) return;
+        const row=S.staff.find(x=>x.id===id); const name=prompt('New name', row?.full_name||''); if(!name) return;
         const { error } = await sb.from('kiosk_users').update({ full_name:name }).eq('id', id).eq('site_id', S.siteId);
         if(error) return toast(error.message);
         await loadStaff(); renderStaff(); toast('Renamed');
       }
       if(act==='roleStaff'){
-        const row = S.staff.find(s=>s.id===id);
-        const role = prompt('Role ("staff" or "admin")', row?.role||'staff'); if(!role) return;
-        if(!/^(staff|admin)$/i.test(role)){ toast('Role must be "staff" or "admin"'); return; }
-        const { error } = await sb.from('kiosk_users').update({ role:role.toLowerCase() }).eq('id', id).eq('site_id', S.siteId);
+        const row=S.staff.find(x=>x.id===id); const role=prompt('Role (admin/staff)', row?.role||'staff'); if(!role) return;
+        const { error } = await sb.from('kiosk_users').update({ role }).eq('id', id).eq('site_id', S.siteId);
         if(error) return toast(error.message);
         await loadStaff(); renderStaff(); toast('Role updated');
       }
       if(act==='delStaff'){
         if(!confirm('Delete this staff member?')) return;
-        await sb.from('team_members').delete().eq('user_id', id).eq('site_id', S.siteId);
         const { error } = await sb.from('kiosk_users').delete().eq('id', id).eq('site_id', S.siteId);
         if(error) return toast(error.message);
-        await Promise.all([loadStaff(), loadTeamMembers()]); renderStaff(); renderTeams(); toast('Staff deleted');
+        await loadStaff(); renderStaff(); updateKPIs(); toast('Staff deleted');
       }
     });
 
-    // Audits tab
-    $('auditSearch').addEventListener('input', renderAudits);
+    // Audits
     $('refreshAudits').addEventListener('click', async ()=>{ await loadAudits(); renderAudits(); });
+    $('auditSearch').addEventListener('input', renderAudits);
     $('exportAudits').addEventListener('click', ()=>{
-      const rows = S.audits || [];
-      if(rows.length === 0){ toast('Nothing to export'); return; }
-      const header = ['When','Staff','Code','Item','Room','Type','Value'];
-      const csvRows = [header.join(',')].concat(rows.map(a => [
-        JSON.stringify(fmtDate(a.submitted_at)),
-        JSON.stringify(a.staff_name||''),
-        JSON.stringify(a.scanned_code||''),
-        JSON.stringify(a.item_name||''),
-        JSON.stringify(a.room||''),
-        JSON.stringify(a.check_type||''),
-        JSON.stringify(a.check_value||'')
-      ].join(',')));
-      download(`audits_site_${S.siteId}.csv`, csvRows.join('\n'));
-      toast('Exported CSV');
+      const rows = S.audits.map(a=>({
+        submitted_at: a.submitted_at,
+        staff_name: a.staff_name,
+        scanned_code: a.scanned_code,
+        item_name: a.item_name,
+        room: a.room,
+        check_type: a.check_type,
+        check_value: a.check_value
+      }));
+      const csv = Papa.unparse(rows);
+      download(`audits_site_${S.siteId}.csv`, csv);
     });
 
-    // Modal and misc close handlers
-    $('roomItemsClose').addEventListener('click', closeRoomItemsModal);
+    // Initial picker listeners
+    const _itemRoomEl = $('itemRoom'); if(_itemRoomEl){ _itemRoomEl.addEventListener('change', ()=>{}); }
+    const _itemTypeEl = $('itemType'); if(_itemTypeEl){ _itemTypeEl.addEventListener('change', ()=>{}); }
 
-  </script>
-</body>
-</html>
+    // Modal close listeners
+    const _cfgClose = $('cfgClose'); if(_cfgClose){ _cfgClose.addEventListener('click', closeCfgModal); }
+    const _cfgModal = $('cfgModal'); if(_cfgModal){ _cfgModal.addEventListener('click', (e)=>{ if(e.target===_cfgModal) closeCfgModal(); }); }
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeCfgModal(); });
+    document.addEventListener('keydown', (e)=>{
+      if(e.key === '`'){
+        const box = document.getElementById('debugBox');
+        if(!box) return;
+        const hidden = box.classList.toggle('hidden');
+        if(!hidden) box.scrollTop = box.scrollHeight;
+      }
+    });
+    const _riClose = $('roomItemsClose'); if(_riClose){ _riClose.addEventListener('click', closeRoomItemsModal); }
+    const _riModal = $('roomItemsModal'); if(_riModal){ _riModal.addEventListener('click', (e)=>{ if(e.target===_riModal) closeRoomItemsModal(); }); }
+    const _cfgEnableEditCode = $('cfgEnableEditCode');
+    if(_cfgEnableEditCode){
+      _cfgEnableEditCode.dataset.mode = 'change';
+      _cfgEnableEditCode.addEventListener('click', async ()=>{
+        const btn = _cfgEnableEditCode;
+        const inp = $('cfgCodeInput');
+        if(!inp) return;
+        // Enter edit mode
+        if(btn.dataset.mode !== 'save'){
+          btn.dataset.mode = 'save';
+          btn.textContent = 'Save';
+          btn.classList.add('save-glow');
+          inp.readOnly = false;
+          inp.classList.add('edit-pulse');
+          inp.focus();
+          inp.select();
+          return;
+        }
+        // Save mode
+        const newCode = (inp.value||'').trim();
+        if(!S.selectedItem){ toast('No item selected'); return; }
+        if(!newCode){ toast('Code required'); return; }
+        // If unchanged, just exit edit mode gracefully
+        if(newCode === S.selectedItem.item_id){
+          btn.dataset.mode = 'change';
+          btn.textContent = 'Change';
+          btn.classList.remove('save-glow');
+          inp.readOnly = true;
+          inp.classList.remove('edit-pulse');
+          return;
+        }
+        btn.disabled = true;
+        try{
+          const { error } = await sb.rpc('admin_upsert_item', {
+            p_site_id: S.siteId,
+            p_item_id: newCode,
+            p_item_name: S.selectedItem.item_name,
+            p_room_name: $('cfgRoom').value,
+            p_category: S.selectedItem.category,
+            p_default_check_type_name: S.selectedItem.default_check_type_name || null,
+            p_comments: S.selectedItem.comments || null
+          });
+          if(error) throw error;
+          await loadItems();
+          S.selectedItem = S.items.find(x => x.item_id === newCode) || S.selectedItem;
+          renderItems();
+          toast('Item ID saved');
+          // Exit edit mode
+          btn.dataset.mode = 'change';
+          btn.textContent = 'Change';
+          btn.classList.remove('save-glow');
+          inp.readOnly = true;
+          inp.classList.remove('edit-pulse');
+        }catch(err){
+          console.error(err);
+          toast(err.message || 'Save failed');
+        }finally{
+          btn.disabled = false;
+        }
+      });
+    }
+
+    // Kick off
+    if(location.protocol === 'file:'){
+      logDebug('Note: Running from file://. Some browsers restrict storage on the null origin. Use a local web server (e.g., `python3 -m http.server`) and open http://localhost:8000/.');
+    }
+</script><truncated__content/>
+</script>
+
+  <pre id="debugBox" class="hidden" style="position:fixed;right:12px;bottom:12px;width:36vw;max-width:520px;height:28vh;overflow:auto;padding:8px 10px;background:#0f1216;border:1px solid var(--line);border-radius:8px;white-space:pre-wrap"></pre>
