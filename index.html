@@ -571,13 +571,36 @@
 
     const SB_STORAGE = getSafeStorage();
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-        storage: window.localStorage
-      }
-    });
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    storage: window.localStorage,
+    storageKey: 'cqc-ipad-auth'
+  }
+});
+
+// --- Robust auth session handling across refreshes ---
+function handleSession(session){
+  if (session && session.user){
+    S.user = session.user;
+    const who = document.getElementById('status');
+    if (who) who.textContent = `${session.user.email}`;
+  } else {
+    S.user = null;
+  }
+}
+// Restore any persisted session and react to real auth changes (incl. INITIAL_SESSION)
+(async () => {
+  const { data: { session } } = await sb.auth.getSession();
+  handleSession(session);
+  sb.auth.onAuthStateChange((event, session) => {
+    if (event === 'INITIAL_SESSION') { handleSession(session); return; }
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') { handleSession(session); }
+    if (event === 'SIGNED_OUT') { handleSession(null); }
+  });
+})();
+
+
     logDebug('Auth persistence: ' + (SB_STORAGE === window.localStorage ? 'localStorage' :
                                      SB_STORAGE === window.sessionStorage ? 'sessionStorage' : 'custom'));
 
@@ -820,101 +843,40 @@ if((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session){
 let __authEventTimes = { signedIn: 0, tokenRefreshed: 0 };
     let __initPromise = null;
     async function init(){
-      if(__initPromise){ logDebug('init(): already running; reusing'); return __initPromise; }
-      __initPromise = (async()=>{
-        logDebug('init(): fetching session…');
-
-        const appEl = document.querySelector('.app');
-        const loginEl = document.getElementById('loginPage');
-
-        // 0) Give supabase-js a moment to hydrate from storage
-        let { data: { session } } = await sb.auth.getSession();
-        if (!session) {
-          const hydrated = await waitForHydration(1500);
-          if (hydrated) session = hydrated;
-          logDebug('After hydration wait: hasSession=' + Boolean(session));
-        }
-        // 1) if still missing, try to rescue from any storage and THEN update `session`
-        if (!session) {
-          const rescued = await rescueSessionFromAnyStorage();
-          if (rescued) ({ data: { session } } = await sb.auth.getSession());
-        }
-        // 2) proceed based on the UPDATED `session`
-        if (!session) {
-          appEl?.classList.add('hidden');
-          loginEl?.classList.remove('hidden');
-          const btn = document.getElementById('lpSignIn'); if (btn) btn.disabled = false;
-          populateSiteSelect();
-          return;
-        }
-
-        // --- App boot after session present ---
-        S.user = session.user;
-        $('who').textContent = S.user.email || 'Signed in';
-
-        // Get profile → site, auto-create if missing using user_metadata
-        const { data: prof, error } = await sb
-          .from('profiles')
-          .select('site_id, full_name, role')
-          .eq('user_id', S.user.id)
-          .limit(1);
-
-        if(error){
-          logDebug('profiles select error: ' + (error?.message||error));
-          // Fallback to user metadata when RLS blocks profiles or table is missing
-          const meta = (S.user && S.user.user_metadata) || {};
-          const metaSite = Number(meta.site_id)||null;
-          const metaName = meta.full_name || null;
-          if(metaSite){
-            logDebug('Using metadata fallback for site: ' + metaSite);
-            S.profile = { site_id: metaSite, full_name: metaName, role: 'admin' };
-            S.siteId = metaSite;
-            $('site').textContent = `Site ${S.siteId}`;
-            document.getElementById('loginPage')?.classList.add('hidden');
-            document.querySelector('.app')?.classList.remove('hidden');
-            $('panel-app')?.classList.remove('hidden');
-            await refreshAll();
-            toast('Using metadata profile (profiles locked by RLS)');
-            return;
-          }
-          toast(error.message);
-          return;
-        }
-
-        let profileRow = (prof && prof[0]) || null;
-        if(!profileRow){
-          logDebug('No profile found from select; attempting metadata/auto-create path');
-          const meta = (S.user && S.user.user_metadata) || {};
-          const metaSite = Number(meta.site_id)||null;
-          const metaName = meta.full_name || null;
-          if(metaSite){
-            const { error: insErr } = await sb.from('profiles').insert({
-              user_id: S.user.id,
-              site_id: metaSite,
-              full_name: metaName,
-              role: 'admin'
-            });
-            if(!insErr){
-              const { data: prof2 } = await sb
-                .from('profiles')
-                .select('site_id, full_name, role')
-                .eq('user_id', S.user.id)
-                .limit(1);
-              profileRow = (prof2 && prof2[0]) || null;
-            }
-          }
-        }
-        if(!profileRow){ $('site').textContent='No profile/site'; toast('No profile found — ask admin to assign your site.'); return; }
-
-        S.profile = profileRow; S.siteId = S.profile.site_id;
-        $('site').textContent = `Site ${S.siteId}`;
-        document.getElementById('loginPage')?.classList.add('hidden');
-        document.querySelector('.app')?.classList.remove('hidden');
-        $('panel-app')?.classList.remove('hidden');
-        await refreshAll();
-      })().finally(()=>{ __initPromise = null; });
-      return __initPromise;
-    }
+  const first = await sb.auth.getSession();
+  let session = first?.data?.session;
+  if (!session || !session.user){
+    // allow INITIAL_SESSION to arrive
+    await new Promise(r => setTimeout(r, 0));
+    const again = await sb.auth.getSession();
+    session = again?.data?.session || null;
+  }
+  if (!session || !session.user){
+    show('screen-login');
+    const st = document.getElementById('status');
+    if (st) st.textContent = 'Not signed in';
+    return;
+  }
+  S.user = session.user;
+  const st = document.getElementById('status');
+  if (st) st.textContent = `${session.user.email}`;
+  // Fetch profile -> site id
+  const { data: prof, error } = await sb.from('profiles')
+    .select('site_id, full_name, role')
+    .eq('user_id', session.user.id)
+    .limit(1);
+  if (error || !prof || !prof.length) {
+    show('screen-login');
+    const lm = document.getElementById('loginMsg');
+    if (lm) lm.textContent = 'No profile/site. Please onboard first.';
+    return;
+  }
+  S.siteId = prof[0].site_id;
+  const stat = document.getElementById('status');
+  if (stat) stat.textContent = `${session.user.email} • Site ${S.siteId}`;
+  await preloadCache();
+  show('screen-pin');
+}
 
     async function refreshAll(){
       await Promise.all([
