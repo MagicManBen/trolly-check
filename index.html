@@ -489,31 +489,20 @@
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVudmVvcW5scW5vYnVmaHVibHl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwMTcyNzYsImV4cCI6MjA3MDU5MzI3Nn0.g93OsXDpO3V9DToU7s-Z3SwBBnB84rBv0JMv-idgSME";
     // Choose a safe storage (fallback if localStorage is blocked, e.g., Safari file://)
     function getSafeStorage(){
-  // Prefer localStorage so users stay signed in across tab closes and restarts.
-  try{
-    const k='__sb_test__';
-    window.localStorage.setItem(k,'1');
-    window.localStorage.removeItem(k);
-    return window.localStorage;
-  }catch(_){
-    try{
-      const k='__sb_test__';
-      window.sessionStorage.setItem(k,'1');
-      window.sessionStorage.removeItem(k);
-      return window.sessionStorage;
-    }catch(__){
-      // Last-resort in-memory stub (no persistence across refresh)
-      return { getItem(){return null;}, setItem(){}, removeItem(){} };
-    }
-  }
-}
-catch(_){
+      // Prefer localStorage so users stay signed in across tab closes and restarts.
+      try{
+        const k='__sb_test__';
+        window.localStorage.setItem(k,'1');
+        window.localStorage.removeItem(k);
+        return window.localStorage;
+      }catch(_){
         try{
           const k='__sb_test__';
-          window.localStorage.setItem(k,'1');
-          window.localStorage.removeItem(k);
-          return window.localStorage;
+          window.sessionStorage.setItem(k,'1');
+          window.sessionStorage.removeItem(k);
+          return window.sessionStorage;
         }catch(__){
+          // Last-resort in-memory stub (no persistence across refresh)
           return { getItem(){return null;}, setItem(){}, removeItem(){} };
         }
       }
@@ -584,7 +573,17 @@ async function handleAuthRedirect(){
 }
 
 // Keep UI in sync when auth state changes (e.g., right after confirm-email redirect)
-sb.auth.onAuthStateChange(async (event) => {
+sb.auth.onAuthStateChange(async (event, session) => {
+  try{ logDebug('Auth event: ' + event); }catch(_){}
+  if(event === 'INITIAL_SESSION'){
+    if(session){
+      await init();
+    }else{
+      // No session on boot – show login explicitly
+      document.querySelector('.app')?.classList.add('hidden');
+      document.getElementById('loginPage')?.classList.remove('hidden');
+    }
+  }
   if(event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED'){
     await init();
   }
@@ -703,7 +702,18 @@ if(document.readyState === 'loading'){
     // ====== INIT & AUTH ======
     async function init(){
       logDebug('init(): fetching session…');
-      const { data:{ session } } = await sb.auth.getSession();
+      let sessionRes = await sb.auth.getSession();
+      let session = sessionRes?.data?.session || null;
+      // On hard refresh, Supabase may hydrate the stored session asynchronously.
+      // Poll briefly so we don't falsely treat the user as signed out.
+      if(!session){
+        for(let i=0;i<15;i++){
+          await new Promise(r=>setTimeout(r, 100));
+          sessionRes = await sb.auth.getSession();
+          session = sessionRes?.data?.session || null;
+          if(session) break;
+        }
+      }
       logDebug('init(): session present? ' + Boolean(session));
       if(!session){
         document.querySelector('.app')?.classList.add('hidden');
