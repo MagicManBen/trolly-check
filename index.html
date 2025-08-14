@@ -787,97 +787,102 @@
     function closeRoomItemsModal(){ const m=$('roomItemsModal'); if(m) m.classList.add('hidden'); }
 
     // ====== INIT & AUTH ======
+    let __initPromise = null;
     async function init(){
-      logDebug('init(): fetching session…');
+      if(__initPromise){ logDebug('init(): already running; reusing'); return __initPromise; }
+      __initPromise = (async()=>{
+        logDebug('init(): fetching session…');
 
-      const appEl = document.querySelector('.app');
-      const loginEl = document.getElementById('loginPage');
+        const appEl = document.querySelector('.app');
+        const loginEl = document.getElementById('loginPage');
 
-      // 0) Give supabase-js a moment to hydrate from storage
-      let { data: { session } } = await sb.auth.getSession();
-      if (!session) {
-        const hydrated = await waitForHydration(1500);
-        if (hydrated) session = hydrated;
-        logDebug('After hydration wait: hasSession=' + Boolean(session));
-      }
-      // 1) if still missing, try to rescue from any storage and THEN update `session`
-      if (!session) {
-        const rescued = await rescueSessionFromAnyStorage();
-        if (rescued) ({ data: { session } } = await sb.auth.getSession());
-      }
-      // 2) proceed based on the UPDATED `session`
-      if (!session) {
-        appEl?.classList.add('hidden');
-        loginEl?.classList.remove('hidden');
-        const btn = document.getElementById('lpSignIn'); if (btn) btn.disabled = false;
-        populateSiteSelect();
-        return;
-      }
-
-      // --- App boot after session present ---
-      S.user = session.user;
-      $('who').textContent = S.user.email || 'Signed in';
-
-      // Get profile → site, auto-create if missing using user_metadata
-      const { data: prof, error } = await sb
-        .from('profiles')
-        .select('site_id, full_name, role')
-        .eq('user_id', S.user.id)
-        .limit(1);
-
-      if(error){
-        logDebug('profiles select error: ' + (error?.message||error));
-        // Fallback to user metadata when RLS blocks profiles or table is missing
-        const meta = (S.user && S.user.user_metadata) || {};
-        const metaSite = Number(meta.site_id)||null;
-        const metaName = meta.full_name || null;
-        if(metaSite){
-          logDebug('Using metadata fallback for site: ' + metaSite);
-          S.profile = { site_id: metaSite, full_name: metaName, role: 'admin' };
-          S.siteId = metaSite;
-          $('site').textContent = `Site ${S.siteId}`;
-          document.getElementById('loginPage')?.classList.add('hidden');
-          document.querySelector('.app')?.classList.remove('hidden');
-          $('panel-app')?.classList.remove('hidden');
-          await refreshAll();
-          toast('Using metadata profile (profiles locked by RLS)');
+        // 0) Give supabase-js a moment to hydrate from storage
+        let { data: { session } } = await sb.auth.getSession();
+        if (!session) {
+          const hydrated = await waitForHydration(1500);
+          if (hydrated) session = hydrated;
+          logDebug('After hydration wait: hasSession=' + Boolean(session));
+        }
+        // 1) if still missing, try to rescue from any storage and THEN update `session`
+        if (!session) {
+          const rescued = await rescueSessionFromAnyStorage();
+          if (rescued) ({ data: { session } } = await sb.auth.getSession());
+        }
+        // 2) proceed based on the UPDATED `session`
+        if (!session) {
+          appEl?.classList.add('hidden');
+          loginEl?.classList.remove('hidden');
+          const btn = document.getElementById('lpSignIn'); if (btn) btn.disabled = false;
+          populateSiteSelect();
           return;
         }
-        toast(error.message);
-        return;
-      }
 
-      let profileRow = (prof && prof[0]) || null;
-      if(!profileRow){
-        logDebug('No profile found from select; attempting metadata/auto-create path');
-        const meta = (S.user && S.user.user_metadata) || {};
-        const metaSite = Number(meta.site_id)||null;
-        const metaName = meta.full_name || null;
-        if(metaSite){
-          const { error: insErr } = await sb.from('profiles').insert({
-            user_id: S.user.id,
-            site_id: metaSite,
-            full_name: metaName,
-            role: 'admin'
-          });
-          if(!insErr){
-            const { data: prof2 } = await sb
-              .from('profiles')
-              .select('site_id, full_name, role')
-              .eq('user_id', S.user.id)
-              .limit(1);
-            profileRow = (prof2 && prof2[0]) || null;
+        // --- App boot after session present ---
+        S.user = session.user;
+        $('who').textContent = S.user.email || 'Signed in';
+
+        // Get profile → site, auto-create if missing using user_metadata
+        const { data: prof, error } = await sb
+          .from('profiles')
+          .select('site_id, full_name, role')
+          .eq('user_id', S.user.id)
+          .limit(1);
+
+        if(error){
+          logDebug('profiles select error: ' + (error?.message||error));
+          // Fallback to user metadata when RLS blocks profiles or table is missing
+          const meta = (S.user && S.user.user_metadata) || {};
+          const metaSite = Number(meta.site_id)||null;
+          const metaName = meta.full_name || null;
+          if(metaSite){
+            logDebug('Using metadata fallback for site: ' + metaSite);
+            S.profile = { site_id: metaSite, full_name: metaName, role: 'admin' };
+            S.siteId = metaSite;
+            $('site').textContent = `Site ${S.siteId}`;
+            document.getElementById('loginPage')?.classList.add('hidden');
+            document.querySelector('.app')?.classList.remove('hidden');
+            $('panel-app')?.classList.remove('hidden');
+            await refreshAll();
+            toast('Using metadata profile (profiles locked by RLS)');
+            return;
+          }
+          toast(error.message);
+          return;
+        }
+
+        let profileRow = (prof && prof[0]) || null;
+        if(!profileRow){
+          logDebug('No profile found from select; attempting metadata/auto-create path');
+          const meta = (S.user && S.user.user_metadata) || {};
+          const metaSite = Number(meta.site_id)||null;
+          const metaName = meta.full_name || null;
+          if(metaSite){
+            const { error: insErr } = await sb.from('profiles').insert({
+              user_id: S.user.id,
+              site_id: metaSite,
+              full_name: metaName,
+              role: 'admin'
+            });
+            if(!insErr){
+              const { data: prof2 } = await sb
+                .from('profiles')
+                .select('site_id, full_name, role')
+                .eq('user_id', S.user.id)
+                .limit(1);
+              profileRow = (prof2 && prof2[0]) || null;
+            }
           }
         }
-      }
-      if(!profileRow){ $('site').textContent='No profile/site'; toast('No profile found — ask admin to assign your site.'); return; }
+        if(!profileRow){ $('site').textContent='No profile/site'; toast('No profile found — ask admin to assign your site.'); return; }
 
-      S.profile = profileRow; S.siteId = S.profile.site_id;
-      $('site').textContent = `Site ${S.siteId}`;
-      document.getElementById('loginPage')?.classList.add('hidden');
-      document.querySelector('.app')?.classList.remove('hidden');
-      $('panel-app')?.classList.remove('hidden');
-      await refreshAll();
+        S.profile = profileRow; S.siteId = S.profile.site_id;
+        $('site').textContent = `Site ${S.siteId}`;
+        document.getElementById('loginPage')?.classList.add('hidden');
+        document.querySelector('.app')?.classList.remove('hidden');
+        $('panel-app')?.classList.remove('hidden');
+        await refreshAll();
+      })().finally(()=>{ __initPromise = null; });
+      return __initPromise;
     }
 
     async function refreshAll(){
@@ -1330,14 +1335,22 @@
       logDebug('Storage in use: ' + (SB_STORAGE === window.localStorage ? 'localStorage' : SB_STORAGE === window.sessionStorage ? 'sessionStorage' : 'custom') + ' • key=' + (getAuthStorageKey() || '(none)'));
 
       // If a session already exists, don't clear it — just initialise the app
+      logDebug('Checking for existing session before sign-in...');
       try{
-        const { data: { session } } = await sb.auth.getSession();
+        const withTimeout = Promise.race([
+          sb.auth.getSession(),
+          new Promise(res => setTimeout(()=> res({ data:{ session:null } }), 1500))
+        ]);
+        const { data: { session } } = await withTimeout;
         if(session){
           logDebug('Already signed in; running init() instead of sign-in.');
           await init();
           return;
         }
-      }catch(_){ /* ignore */ }
+      }catch(err){
+        logDebug('getSession check failed: ' + (err?.message||err));
+      }
+      logDebug('No existing session; proceeding to password sign-in.');
 
       $('lpMsg').textContent = 'Signing in…';
 
