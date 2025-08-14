@@ -168,7 +168,7 @@
   <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
 </head>
 <body>
-  <div id="loginPage" class="login-page hidden">
+  <div id="loginPage" class="login-page">
     <div class="login-card">
       <div class="login-brand">CQC Admin</div>
       <h2 id="lpTitle" style="margin:6px 0 14px 0">Sign in</h2>
@@ -193,7 +193,7 @@
       </div>
     </div>
   </div>
-  <div class="app">
+  <div class="app hidden">
     <aside class="sidebar">
       <div class="brand">CQC Admin</div>
       <div class="status">
@@ -513,19 +513,36 @@
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Handle email-confirmation / magic-link redirects (tokens in the URL hash)
 async function handleAuthRedirect(){
-  try{
-    const hash = window.location.hash || '';
-    if(hash.includes('access_token')){
-      const p = new URLSearchParams(hash.substring(1));
-      const access_token  = p.get('access_token');
-      const refresh_token = p.get('refresh_token');
-      if(access_token && refresh_token){
-        await sb.auth.setSession({ access_token, refresh_token });
-      }
-      // Clean the URL so the hash doesn’t linger
-      history.replaceState({}, document.title, location.pathname + location.search);
-    }
-  }catch(_){ /* ignore */ }
+      try{
+        const hash = window.location.hash || '';
+        const hasTokens = hash.includes('access_token') && hash.includes('refresh_token');
+
+        if(hasTokens){
+          const p = new URLSearchParams(hash.substring(1));
+          const access_token  = p.get('access_token');
+          const refresh_token = p.get('refresh_token');
+          if(access_token && refresh_token){
+            await sb.auth.setSession({ access_token, refresh_token });
+          }
+          // Clean URL so the hash doesn't linger
+          history.replaceState({}, document.title, location.pathname + location.search);
+          return;
+        }
+
+        // If this is a confirm-email visit without tokens (common on some clients),
+        // just show the login page with a helpful message.
+        const qs = new URLSearchParams(location.search);
+        const isConfirm = hash.includes('type=signup') || qs.get('type') === 'signup' || hash.includes('confirmed=1') || qs.get('confirmed') === '1';
+        if(isConfirm){
+          document.querySelector('.app')?.classList.add('hidden');
+          document.getElementById('loginPage')?.classList.remove('hidden');
+          if(typeof setLpAuthMode==='function') setLpAuthMode('login');
+          const msg = document.getElementById('lpMsg');
+          if(msg) msg.textContent = 'Email confirmed — please sign in.';
+          // Tidy URL
+          history.replaceState({}, document.title, location.pathname);
+        }
+      }catch(_){ /* ignore */ }
 }
 
 // Keep UI in sync when auth state changes (e.g., right after confirm-email redirect)
@@ -538,9 +555,18 @@ sb.auth.onAuthStateChange(async (event) => {
     document.getElementById('loginPage')?.classList.remove('hidden');
   }
 });
-window.addEventListener('DOMContentLoaded', ()=>{
-  handleAuthRedirect().then(()=> init());
-});
+function __boot(){
+  try{
+    handleAuthRedirect().then(()=> init());
+  }catch(_){
+    try{ init(); }catch(__){}
+  }
+}
+if(document.readyState === 'loading'){
+  window.addEventListener('DOMContentLoaded', __boot);
+}else{
+  __boot();
+}
     // ====== STATE ======
     const S = {
       user: null, profile: null, siteId: null,
@@ -1207,7 +1233,10 @@ window.addEventListener('DOMContentLoaded', ()=>{
       $('lpMsg').textContent = 'Creating account…';
       const { data, error } = await sb.auth.signUp({
         email, password,
-        options: { data: { site_id, full_name } }
+        options: {
+          data: { site_id, full_name },
+          emailRedirectTo: location.origin + location.pathname + '#confirmed=1'
+        }
       });
       if(error){ $('lpMsg').textContent = error.message; return; }
       // Try to create profile (ignore errors if policies block it until confirmation)
@@ -1659,34 +1688,4 @@ window.addEventListener('DOMContentLoaded', ()=>{
         await loadStaff(); renderStaff(); toast('Role updated');
       }
       if(act==='delStaff'){
-        if(!confirm('Delete this staff member?')) return;
-        const { error } = await sb.from('kiosk_users').delete().eq('id', id).eq('site_id', S.siteId);
-        if(error) return toast(error.message);
-        await loadStaff(); renderStaff(); updateKPIs(); toast('Staff deleted');
-      }
-    });
-
-    // Audits
-    $('refreshAudits').addEventListener('click', async ()=>{ await loadAudits(); renderAudits(); });
-    $('auditSearch').addEventListener('input', renderAudits);
-    $('exportAudits').addEventListener('click', ()=>{
-      const rows = S.audits.map(a=>({
-        submitted_at: a.submitted_at,
-        staff_name: a.staff_name,
-        scanned_code: a.scanned_code,
-        item_name: a.item_name,
-        room: a.room,
-        check_type: a.check_type,
-        check_value: a.check_value
-      }));
-      const csv = Papa.unparse(rows);
-      download(`audits_site_${S.siteId}.csv`, csv);
-    });
-
-    // Initial picker listeners
-    const _itemRoomEl = $('itemRoom'); if(_itemRoomEl){ _itemRoomEl.addEventListener('change', ()=>{}); }
-    const _itemTypeEl = $('itemType'); if(_itemTypeEl){ _itemTypeEl.addEventListener('change', ()=>{}); }
-
-    // Modal close listeners
-    const _cfgClose = $('cfgClose'); if(_cfgClose){ _cfgClose.addEventListener('click', closeCfgModal); }
-    const _cfgModal = $('cfgModal')<truncated__content/>
+        if(!confirm('Delete th<truncated__content/>
