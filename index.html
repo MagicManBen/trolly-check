@@ -193,7 +193,7 @@
       </div>
     </div>
   </div>
-  <div class="app">
+  <div class="app hidden">
     <aside class="sidebar">
       <div class="brand">CQC Admin</div>
       <div class="status">
@@ -513,19 +513,36 @@
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Handle email-confirmation / magic-link redirects (tokens in the URL hash)
 async function handleAuthRedirect(){
-  try{
-    const hash = window.location.hash || '';
-    if(hash.includes('access_token')){
-      const p = new URLSearchParams(hash.substring(1));
-      const access_token  = p.get('access_token');
-      const refresh_token = p.get('refresh_token');
-      if(access_token && refresh_token){
-        await sb.auth.setSession({ access_token, refresh_token });
-      }
-      // Clean the URL so the hash doesn’t linger
-      history.replaceState({}, document.title, location.pathname + location.search);
-    }
-  }catch(_){ /* ignore */ }
+      try{
+        const hash = window.location.hash || '';
+        const hasTokens = hash.includes('access_token') && hash.includes('refresh_token');
+
+        if(hasTokens){
+          const p = new URLSearchParams(hash.substring(1));
+          const access_token  = p.get('access_token');
+          const refresh_token = p.get('refresh_token');
+          if(access_token && refresh_token){
+            await sb.auth.setSession({ access_token, refresh_token });
+          }
+          // Clean URL so the hash doesn't linger
+          history.replaceState({}, document.title, location.pathname + location.search);
+          return;
+        }
+
+        // If this is a confirm-email visit without tokens (common on some clients),
+        // just show the login page with a helpful message.
+        const qs = new URLSearchParams(location.search);
+        const isConfirm = hash.includes('type=signup') || qs.get('type') === 'signup' || hash.includes('confirmed=1') || qs.get('confirmed') === '1';
+        if(isConfirm){
+          document.querySelector('.app')?.classList.add('hidden');
+          document.getElementById('loginPage')?.classList.remove('hidden');
+          if(typeof setLpAuthMode==='function') setLpAuthMode('login');
+          const msg = document.getElementById('lpMsg');
+          if(msg) msg.textContent = 'Email confirmed — please sign in.';
+          // Tidy URL
+          history.replaceState({}, document.title, location.pathname);
+        }
+      }catch(_){ /* ignore */ }
 }
 
 // Keep UI in sync when auth state changes (e.g., right after confirm-email redirect)
@@ -1207,7 +1224,10 @@ window.addEventListener('DOMContentLoaded', ()=>{
       $('lpMsg').textContent = 'Creating account…';
       const { data, error } = await sb.auth.signUp({
         email, password,
-        options: { data: { site_id, full_name } }
+        options: {
+          data: { site_id, full_name },
+          emailRedirectTo: location.origin + location.pathname + '#confirmed=1'
+        }
       });
       if(error){ $('lpMsg').textContent = error.message; return; }
       // Try to create profile (ignore errors if policies block it until confirmation)
