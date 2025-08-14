@@ -512,7 +512,7 @@
       auth: {
         // Persist within this tab (sessionStorage). Survives refresh; clears on tab close.
         persistSession: true,
-        autoRefreshToken: true,
+        autoRefreshToken: false,
         detectSessionInUrl: true,
         storage: SB_STORAGE
       }
@@ -1223,13 +1223,6 @@ if(document.readyState === 'loading'){
       }, 800);
 
       try {
-        const reachable = await checkSupabaseConnectivity();
-        if(!reachable){
-          $('lpMsg').textContent = 'Cannot reach auth server. Check network / firewall.';
-          clearInterval(tickTimer);
-          return;
-        }
-
         logDebug("Sending credentials to Supabase...");
 
         // Race with a soft timeout to surface hangs
