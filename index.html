@@ -1856,5 +1856,128 @@
     $('roomItemsClose').addEventListener('click', closeRoomItemsModal);
 
   </script>
+
+<script>
+(() => {
+  // Only run once
+  if (window.__LP_LOGIN_PATCH_APPLIED__) return;
+  window.__LP_LOGIN_PATCH_APPLIED__ = true;
+
+  const $ = (id) => document.getElementById(id);
+  const logDebug = (msg) => {
+    try {
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2,'0');
+      const mm = String(now.getMinutes()).padStart(2,'0');
+      const ss = String(now.getSeconds()).padStart(2,'0');
+      console.debug(`[${hh}:${mm}:${ss}] [patch] ${msg}`);
+    } catch {}
+  };
+
+  function waitForSignedInOnce(ms=15000) {
+    return new Promise((resolve, reject) => {
+      let timer = setTimeout(() => {
+        cleanup();
+        resolve({ timedOut: true });
+      }, ms);
+      const { data: unsub } = (window.sb?.auth || {}).onAuthStateChange?.((ev, sess) => {
+        if (ev === 'SIGNED_IN' && sess) {
+          cleanup();
+          resolve({ timedOut: false, session: sess });
+        }
+      }) || { data: { subscription: { unsubscribe(){ } } } };
+      function cleanup(){
+        try { clearTimeout(timer); } catch {}
+        try { unsub?.subscription?.unsubscribe?.(); } catch {}
+      }
+    });
+  }
+
+  async function doLoginPatched() {
+    const btn = $('lpSignIn');
+    const emailEl = $('lpEmail');
+    const passEl  = $('lpPassword');
+    if (!btn || !emailEl || !passEl) return;
+    if (window.__LP_LOGIN_IN_FLIGHT__) { logDebug('login blocked: already in flight'); return; }
+    window.__LP_LOGIN_IN_FLIGHT__ = true;
+    btn.setAttribute('disabled','disabled');
+
+    const email = emailEl.value?.trim();
+    const password = passEl.value || '';
+
+    try {
+      logDebug('LOGIN START');
+      if (!window.sb?.auth?.signInWithPassword) {
+        throw new Error('Supabase client not initialised.');
+      }
+
+      // Soft UI timeout
+      let softTimer = setTimeout(() => {
+        logDebug('soft timeout: still waiting…');
+        const msg = document.getElementById('lpMsg');
+        if (msg) msg.textContent = 'Still working…';
+      }, 15000);
+
+      // Fire sign-in and wait for SIGNED_IN event (whichever arrives effectively completes the flow)
+      const signInPromise = window.sb.auth.signInWithPassword({ email, password });
+      const eventPromise  = waitForSignedInOnce(15000);
+
+      const [{ data, error }, eventRes] = await Promise.allSettled([signInPromise, eventPromise])
+        .then(results => results.map(r => r.status === 'fulfilled' ? r.value : r.reason));
+
+      clearTimeout(softTimer);
+
+      // Handle explicit auth error
+      if (error) {
+        logDebug('Supabase error: ' + (error?.message || JSON.stringify(error)));
+        const msg = $('lpMsg'); if (msg) msg.textContent = error.message || 'Login failed.';
+        return;
+      }
+
+      // Verify session (from event or getSession)
+      let session = eventRes?.session;
+      if (!session) {
+        try {
+          const s = await window.sb.auth.getSession();
+          session = s?.data?.session || null;
+        } catch {}
+      }
+      logDebug('session ok: ' + !!session);
+
+      // Call init() if present
+      try {
+        if (typeof window.init === 'function') {
+          await window.init();
+          logDebug('init() done');
+        }
+      } catch (e) {
+        logDebug('init() error: ' + (e?.message || e));
+      }
+
+      const msg = $('lpMsg'); if (msg) msg.textContent = '';
+    } catch (err) {
+      const msg = $('lpMsg'); if (msg) msg.textContent = (err && err.message) ? err.message : 'Login failed.';
+      logDebug('unexpected error: ' + (err?.message || err));
+    } finally {
+      window.__LP_LOGIN_IN_FLIGHT__ = false;
+      btn.removeAttribute('disabled');
+    }
+  }
+
+  // Rebind click: replace node to drop any existing listeners, then add one
+  const btn = $('lpSignIn');
+  if (btn) {
+    const clone = btn.cloneNode(true);
+    btn.parentNode.replaceChild(clone, btn);
+    clone.addEventListener('click', (e) => {
+      e.preventDefault();
+      doLoginPatched();
+    }, { passive: true });
+    logDebug('login button rebound with patched handler');
+  } else {
+    logDebug('login button not found; patch loaded but not bound');
+  }
+})();
+</script>
 </body>
 </html>
