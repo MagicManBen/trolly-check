@@ -489,8 +489,17 @@
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVudmVvcW5scW5vYnVmaHVibHl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwMTcyNzYsImV4cCI6MjA3MDU5MzI3Nn0.g93OsXDpO3V9DToU7s-Z3SwBBnB84rBv0JMv-idgSME";
     // Choose a safe storage (fallback if localStorage is blocked, e.g., Safari file://)
     function getSafeStorage(){
-      // Prefer sessionStorage so users stay signed in on refresh,
-      // but are cleared when the tab/window closes.
+      // Prefer localStorage when running from file:// (Safari and some browsers clear sessionStorage on refresh)
+      const preferLocal = location.protocol === 'file:';
+      try{
+        if(preferLocal){
+          const k='__sb_test__';
+          window.localStorage.setItem(k,'1');
+          window.localStorage.removeItem(k);
+          return window.localStorage;
+        }
+      }catch(_){ /* fall through to sessionStorage */ }
+
       try{
         const k='__sb_test__';
         window.sessionStorage.setItem(k,'1');
@@ -507,12 +516,49 @@
         }
       }
     }
+
+    // Compute the Supabase auth storage key (matches supabase-js v2)
+    function getAuthStorageKey(){
+      try{
+        const host = new URL(SUPABASE_URL).host; // e.g., unveoqnlqnobufhublyw.supabase.co
+        const projectRef = host.split('.')[0];
+        return `sb-${projectRef}-auth-token`;
+      }catch(_){
+        return null;
+      }
+    }
+
+    // Best-effort: if supabase.getSession() returns null after a refresh (e.g., file:// quirks),
+    // rehydrate from whatever is persisted in SB_STORAGE.
+    async function rescueSessionFromStorage(){
+      try{
+        const key = getAuthStorageKey();
+        if(!key || !SB_STORAGE || typeof SB_STORAGE.getItem !== 'function') return false;
+        const raw = SB_STORAGE.getItem(key);
+        if(!raw) return false;
+        const parsed = JSON.parse(raw);
+        // supabase-js v2 stores { currentSession: { access_token, refresh_token, ... }, expiresAt: ... }
+        const cur = parsed?.currentSession || parsed?.session || null;
+        const access_token  = cur?.access_token  || cur?.accessToken  || null;
+        const refresh_token = cur?.refresh_token || cur?.refreshToken || null;
+        if(access_token && refresh_token){
+          await sb.auth.setSession({ access_token, refresh_token });
+          logDebug('Rescued Supabase session from storage');
+          return true;
+        }
+        return false;
+      }catch(err){
+        logDebug('rescueSessionFromStorage error: ' + (err?.message || err));
+        return false;
+      }
+    }
+
     const SB_STORAGE = getSafeStorage();
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
         // Persist within this tab (sessionStorage). Survives refresh; clears on tab close.
         persistSession: true,
-        autoRefreshToken: false,
+        autoRefreshToken: true,
         detectSessionInUrl: true,
         storage: SB_STORAGE
       }
@@ -1227,6 +1273,7 @@ async function init(){
       if(onFileProtocol){
         logDebug('Warning: Page loaded via file:// — some browsers (e.g., Safari) restrict auth/storage for the null origin. Running from http://localhost is recommended.');
       }
+      logDebug('Storage in use: ' + (SB_STORAGE === window.localStorage ? 'localStorage' : SB_STORAGE === window.sessionStorage ? 'sessionStorage' : 'custom') + ' • key=' + (getAuthStorageKey() || '(none)'));
 
       // Proactively clear any stale local session to avoid blocked second logins
       try{
