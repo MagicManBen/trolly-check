@@ -633,6 +633,12 @@
       logDebug('onAuthStateChange: ' + event + ' (hasSession=' + Boolean(session) + ')');
       if(event === 'SIGNED_IN'){ __authEventTimes.signedIn = Date.now(); }
       if(event === 'TOKEN_REFRESHED'){ __authEventTimes.tokenRefreshed = Date.now(); }
+
+if((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session){
+  // Optimistically reveal app UI immediately; init() will finish wiring data
+  document.getElementById('loginPage')?.classList.add('hidden');
+  document.querySelector('.app')?.classList.remove('hidden');
+}
       if(event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED'){
         await init();
       }
@@ -1362,7 +1368,7 @@ let __authEventTimes = { signedIn: 0, tokenRefreshed: 0 };
 // Guard against duplicate sign-in immediately after a SIGNED_IN event on reload
 if (typeof __authEventTimes !== 'undefined') {
   const sinceSignedInMs = Date.now() - (__authEventTimes.signedIn || 0);
-  if (sinceSignedInMs < 3000) {
+  if (sinceSignedInMs < 8000) {
     logDebug('Skipping duplicate sign-in; recent SIGNED_IN detected ' + sinceSignedInMs + 'ms ago.');
     $('lpMsg').textContent = '';
     await init();
@@ -1372,6 +1378,34 @@ if (typeof __authEventTimes !== 'undefined') {
 
       // If a session already exists, don't clear it — just initialise the app
       logDebug('Checking for existing session before sign-in...');
+
+// If we very recently saw a SIGNED_IN event, skip another grant
+if (typeof __authEventTimes !== 'undefined' && (Date.now() - (__authEventTimes.signedIn || 0) < 8000)) {
+  logDebug('Recent SIGNED_IN (<=8s) detected; running init() instead of sign-in.');
+  await init();
+  return;
+}
+// Try a quick rescue from storage before attempting password grant
+try{
+  const key = getAuthStorageKey();
+  const raw = (key && (SB_STORAGE.getItem(key) || (window.localStorage && localStorage.getItem(key)) || (window.sessionStorage && sessionStorage.getItem(key)))) || null;
+  if(raw){
+    try{
+      const parsed = JSON.parse(raw);
+      const cur = parsed?.currentSession || parsed?.session || null;
+      const access_token  = cur?.access_token  || cur?.accessToken  || null;
+      const refresh_token = cur?.refresh_token || cur?.refreshToken || null;
+      if(access_token && refresh_token){
+        const { data: setData, error: setErr } = await sb.auth.setSession({ access_token, refresh_token });
+        if(!setErr && setData?.session){
+          logDebug('Rescued session from storage during pre-check; running init().');
+          await init();
+          return;
+        }
+      }
+    }catch(_){}
+  }
+}catch(_){}
       try{
         const withTimeout = Promise.race([
           sb.auth.getSession(),
@@ -1393,7 +1427,13 @@ if (typeof __authEventTimes !== 'undefined') {
       // Show progress ticks if network hangs
       let tick = 0; let tickTimer = setInterval(()=>{
         tick++; $('lpMsg').textContent = 'Signing in' + '.'.repeat((tick%3)+1);
-        if(tick===4){ logDebug('Still waiting for Supabase… (network or CORS issue?)'); }
+        if(tick===4){
+        if(typeof __authEventTimes !== 'undefined' && (Date.now() - (__authEventTimes.signedIn||0) < 6000)){
+          logDebug('SIGNED_IN event already received; waiting for SDK to settle…');
+        }else{
+          logDebug('Still waiting for Supabase… (network or CORS issue?)');
+        }
+      }
       }, 800);
 
       try {
