@@ -144,11 +144,55 @@
     .modal input,.modal select,.modal textarea{font-size:16px}
     .modal .table-wrap{max-height:48vh}
     .modal .tools .btn.small{font-size:12px;padding:6px 8px}
+
+    /* Standalone login page */
+    .login-page{display:grid;place-items:center;min-height:100vh;padding:24px}
+    .login-card{width:min(420px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+    .login-brand{font-weight:800;margin-bottom:8px}
+    .login-row{display:grid;gap:10px}
+    /* Themed select + focus */
+    .login-card input:focus, .login-card select:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(34,197,94,.22); }
+    .select-wrap{ position:relative; }
+    .select-wrap select{ appearance:none; -webkit-appearance:none; -moz-appearance:none; padding-right:36px; }
+    .select-wrap::after{ content:'▾'; position:absolute; right:12px; top:50%; transform:translateY(-50%); pointer-events:none; color:var(--muted); font-size:14px; }
+
+    /* Bottom action pills */
+    .link-row{ display:flex; gap:8px; justify-content:space-between; align-items:center; }
+    .link-pill{ background:transparent; border:1px solid var(--line); color:var(--muted); border-radius:999px; padding:8px 12px; cursor:pointer; }
+    .link-pill:hover{ color:var(--text); border-color:#3a3f47; }
+    /* Themed links (avoid default blue) */
+    .login-card a{ color: var(--muted); text-decoration: none; }
+    .login-card a:hover{ color: var(--text); text-decoration: underline; }
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
 </head>
 <body>
+  <div id="loginPage" class="login-page hidden">
+    <div class="login-card">
+      <div class="login-brand">CQC Admin</div>
+      <h2 id="lpTitle" style="margin:6px 0 14px 0">Sign in</h2>
+      <div id="lpRowCreds" class="login-row">
+        <input id="lpEmail" type="email" placeholder="email@example.com" autocomplete="username" />
+        <input id="lpPass" type="password" placeholder="Password" autocomplete="current-password" />
+      </div>
+      <div id="lpSignupExtra" class="login-row hidden" style="margin-top:10px">
+        <div class="select-wrap"><select id="lpSiteSelect"></select></div>
+      </div>
+      <div id="lpPrimaryRow" class="login-row" style="margin-top:10px">
+        <button class="btn primary" id="lpSignIn">Sign in</button>
+      </div>
+      <div id="lpSignupNameRow" class="login-row hidden" style="margin-top:10px">
+        <input id="lpName" type="text" placeholder="Full name" />
+        <button class="btn primary" id="lpSignIn2">Enter site</button>
+      </div>
+      <div id="lpMsg" class="muted" style="margin-top:8px"></div>
+      <div class="link-row" style="margin-top:12px">
+        <button class="link-pill" id="lpSignupLink">Create an account</button>
+        <button class="link-pill" id="lpForgotLink">Forgot password?</button>
+      </div>
+    </div>
+  </div>
   <div class="app">
     <aside class="sidebar">
       <div class="brand">CQC Admin</div>
@@ -171,28 +215,6 @@
 
     <main class="main">
       <!-- LOGIN PANEL -->
-      <div id="panel-login" class="card">
-        <h3>Sign in</h3>
-        <div class="grid cols-3">
-          <div><input id="loginEmail" type="text" placeholder="email@example.com"></div>
-          <div><input id="loginPass" type="password" placeholder="Password"></div>
-          <div><button class="btn primary" id="doLogin">Sign in</button></div>
-        </div>
-        <div id="loginMsg" class="muted" style="margin-top:8px"></div>
-
-        <div class="muted" style="margin-top:10px">
-          <a href="#" id="toggleAuth">Create an account</a>
-          &nbsp;•&nbsp;
-          <a href="#" id="forgotLink">Forgot password?</a>
-        </div>
-
-        <!-- extra fields shown only in Sign-up mode -->
-        <div id="signupRow" class="grid cols-3 hidden" style="margin-top:10px">
-          <div><input id="signupName" type="text" placeholder="Full name"></div>
-          <div><input id="signupSite" type="number" placeholder="Site ID"></div>
-          <div><button class="btn" id="doSignup">Create account</button></div>
-        </div>
-      </div>
       <!-- MAIN APP PANEL -->
       <div id="panel-app" class="hidden">
         <div class="topbar">
@@ -489,7 +511,36 @@
     const SUPABASE_URL = "https://unveoqnlqnobufhublyw.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVudmVvcW5scW5vYnVmaHVibHl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwMTcyNzYsImV4cCI6MjA3MDU5MzI3Nn0.g93OsXDpO3V9DToU7s-Z3SwBBnB84rBv0JMv-idgSME";
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Handle email-confirmation / magic-link redirects (tokens in the URL hash)
+async function handleAuthRedirect(){
+  try{
+    const hash = window.location.hash || '';
+    if(hash.includes('access_token')){
+      const p = new URLSearchParams(hash.substring(1));
+      const access_token  = p.get('access_token');
+      const refresh_token = p.get('refresh_token');
+      if(access_token && refresh_token){
+        await sb.auth.setSession({ access_token, refresh_token });
+      }
+      // Clean the URL so the hash doesn’t linger
+      history.replaceState({}, document.title, location.pathname + location.search);
+    }
+  }catch(_){ /* ignore */ }
+}
 
+// Keep UI in sync when auth state changes (e.g., right after confirm-email redirect)
+sb.auth.onAuthStateChange(async (event) => {
+  if(event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED'){
+    await init();
+  }
+  if(event === 'SIGNED_OUT'){
+    document.querySelector('.app')?.classList.add('hidden');
+    document.getElementById('loginPage')?.classList.remove('hidden');
+  }
+});
+window.addEventListener('DOMContentLoaded', ()=>{
+  handleAuthRedirect().then(()=> init());
+});
     // ====== STATE ======
     const S = {
       user: null, profile: null, siteId: null,
@@ -511,10 +562,10 @@
       $(id)?.classList.remove('hidden');
     }
     function updateKPIs(){
-      $('kpiRooms').textContent = S.rooms.length;
-      $('kpiTypes').textContent = S.types.length;
-      $('kpiItems').textContent = S.items.length;
-      $('kpiStaff').textContent = S.staff.length;
+      const r=$('kpiRooms'); if(r) r.textContent = S.rooms.length;
+      const t=$('kpiTypes'); if(t) t.textContent = S.types.length;
+      const i=$('kpiItems'); if(i) i.textContent = S.items.length;
+      const s=$('kpiStaff'); if(s) s.textContent = S.staff.length;
     }
     function buildTypesByCat(){
       S.typesByCat = {};
@@ -554,6 +605,11 @@
       const a=document.createElement('a'); a.href='data:text/plain;charset=utf-8,'+encodeURIComponent(text); a.download=filename; a.click();
     }
 
+    function hideTeamsUI(){
+      document.querySelector('.nav button[data-tab="tab-teams"]')?.classList.add('hidden');
+      document.getElementById('tab-teams')?.classList.add('hidden');
+    }
+
     function isPinSet(v){
       // Treat PIN as set when the plain pin column has a non-empty value
       // and is not the placeholder string 'EMPTY'.
@@ -583,16 +639,52 @@
     // ====== INIT & AUTH ======
     async function init(){
       const { data:{ session } } = await sb.auth.getSession();
-      if(!session){ $('panel-login').classList.remove('hidden'); $('panel-app').classList.add('hidden'); return; }
+      if(!session){
+        document.querySelector('.app')?.classList.add('hidden');
+        document.getElementById('loginPage')?.classList.remove('hidden');
+        populateSiteSelect();
+        return;
+      }
       S.user = session.user;
       $('who').textContent = S.user.email || 'Signed in';
-      // Get profile -> site
-      const { data: prof, error } = await sb.from('profiles').select('site_id, full_name, role').eq('user_id', S.user.id).limit(1);
-      if(error || !prof || !prof.length){ $('site').textContent='No profile/site'; toast(error?.message||'No profile'); return; }
-      S.profile = prof[0]; S.siteId = S.profile.site_id;
+      // Get profile -> site, auto-create if missing using user_metadata
+      const { data: prof, error } = await sb
+        .from('profiles')
+        .select('site_id, full_name, role')
+        .eq('user_id', S.user.id)
+        .limit(1);
+      if(error){ toast(error.message); return; }
+
+      let profileRow = (prof && prof[0]) || null;
+      if(!profileRow){
+        // First login after email confirmation on a different device:
+        // use metadata captured at sign-up to create the profile now.
+        const meta = (S.user && S.user.user_metadata) || {};
+        const metaSite = Number(meta.site_id)||null;
+        const metaName = meta.full_name || null;
+        if(metaSite){
+          const { error: insErr } = await sb.from('profiles').insert({
+            user_id: S.user.id,
+            site_id: metaSite,
+            full_name: metaName,
+            role: 'admin'
+          });
+          if(!insErr){
+            const { data: prof2 } = await sb
+              .from('profiles')
+              .select('site_id, full_name, role')
+              .eq('user_id', S.user.id)
+              .limit(1);
+            profileRow = (prof2 && prof2[0]) || null;
+          }
+        }
+      }
+      if(!profileRow){ $('site').textContent='No profile/site'; toast('No profile found — ask admin to assign your site.'); return; }
+      S.profile = profileRow; S.siteId = S.profile.site_id;
       $('site').textContent = `Site ${S.siteId}`;
-      $('panel-login').classList.add('hidden');
-      $('panel-app').classList.remove('hidden');
+      document.getElementById('loginPage')?.classList.add('hidden');
+      document.querySelector('.app')?.classList.remove('hidden');
+      $('panel-app')?.classList.remove('hidden');
       await refreshAll();
     }
 
@@ -751,17 +843,37 @@
     async function loadTeams(){
       const { data, error } = await sb.from('teams')
         .select('id,name').eq('site_id', S.siteId).order('name');
-      if(!error) S.teams = data||[]; else toast(error.message);
+      if(error){
+        if((error.message||'').includes('Could not find the table')){
+          S.teams = [];
+          hideTeamsUI();
+          return;
+        }
+        toast(error.message); return;
+      }
+      S.teams = data||[];
     }
     async function loadTeamMembers(){
       const { data, error } = await sb.from('team_members')
         .select('team_id,user_id').eq('site_id', S.siteId);
-      if(!error) S.teamMembers = data||[]; else toast(error.message);
+      if(error){
+        if((error.message||'').includes('Could not find the table')){ S.teamMembers = []; return; }
+        toast(error.message); return;
+      }
+      S.teamMembers = data||[];
     }
     async function loadCheckTypeTeams(){
       const { data, error } = await sb.from('check_type_teams')
         .select('check_type_id,team_id').eq('site_id', S.siteId);
-      if(!error) S.checkTypeTeams = data||[]; else toast(error.message);
+      if(error){
+        if((error.message||'').includes('Could not find the table')){
+          S.checkTypeTeams = [];
+          buildTypeTeamMap();
+          return;
+        }
+        toast(error.message); return;
+      }
+      S.checkTypeTeams = data||[];
       buildTypeTeamMap();
     }
 
@@ -1005,67 +1117,164 @@
     }
 
     // ====== ACTIONS ======
-    // Login
-    $('doLogin').addEventListener('click', async ()=>{
-      $('loginMsg').textContent = 'Signing in…';
-      const email=$('loginEmail').value.trim(), password=$('loginPass').value;
-      const { error } = await sb.auth.signInWithPassword({ email, password });
-      if(error){ $('loginMsg').textContent = error.message; return; }
-      $('loginMsg').textContent='';
-      await init();
-    });
-    $('btnLogout').addEventListener('click', async ()=>{
-      await sb.auth.signOut(); location.reload();
-    });
+    // Login + Sign-up (standalone page)
+    let lpAuthMode = 'login';
+    let lpSignupStep = 1; // 1: email/pass/site, 2: full name
 
-    // --- Auth mode toggle & helpers ---
-    let authMode = 'login'; // or 'signup'
-    function setAuthMode(mode){
-      authMode = mode;
-      const signupRow = document.getElementById('signupRow');
-      if (signupRow) signupRow.classList.toggle('hidden', mode !== 'signup');
-      const h = document.querySelector('#panel-login h3');
-      if (h) h.textContent = (mode === 'signup') ? 'Create an account' : 'Sign in';
-      const t = document.getElementById('toggleAuth');
-      if (t) t.textContent = (mode === 'signup') ? 'Have an account? Sign in' : 'Create an account';
-      const msg = document.getElementById('loginMsg');
-      if (msg) msg.textContent = '';
+    async function populateSiteSelect(){
+      const sel = $('lpSiteSelect'); if(!sel) return;
+      // Always refresh the list
+      sel.innerHTML = '<option value="">Loading sites…</option>';
+      sel.disabled = true;
+      const { data, error } = await sb.from('sites').select('id,name').order('name');
+      if(error){
+        sel.innerHTML = '<option value="">(failed to load sites)</option>';
+        sel.disabled = false;
+        return;
+      }
+      const rows = data || [];
+      if(rows.length === 0){
+        sel.innerHTML = '<option value="">(no sites available — ask admin)</option>';
+        sel.disabled = false;
+        return;
+      }
+      sel.innerHTML = '<option value="">Select site…</option>' + rows.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+      sel.disabled = false;
     }
-    document.getElementById('toggleAuth')?.addEventListener('click', (e)=>{
-      e.preventDefault(); setAuthMode(authMode === 'login' ? 'signup' : 'login');
-    });
 
-    // --- Sign up (email & password) ---
-    document.getElementById('doSignup')?.addEventListener('click', async ()=>{
-      const email = document.getElementById('loginEmail').value.trim();
-      const password = document.getElementById('loginPass').value;
-      const full_name = document.getElementById('signupName').value.trim();
-      const site_id = Number(document.getElementById('signupSite').value || 1);
-      const msg = document.getElementById('loginMsg');
-      if (!email || !password) { msg.textContent = 'Enter email & password.'; return; }
-      msg.textContent = 'Creating account…';
-      const { data, error } = await sb.auth.signUp({ email, password });
-      if (error) { msg.textContent = error.message; return; }
-      // Create a profile row so app can resolve site_id on first login
-      try {
+    function setSignupStep(step){
+      lpSignupStep = step;
+      const rowCreds = $('lpRowCreds');
+      const rowSite  = $('lpSignupExtra');
+      const rowName  = $('lpSignupNameRow');
+      const btn1     = $('lpSignIn');
+      const btn2     = $('lpSignIn2');
+      if(step === 1){
+        rowCreds?.classList.remove('hidden');
+        rowSite?.classList.remove('hidden');
+        rowName?.classList.add('hidden');
+        btn1?.classList.remove('hidden');
+        if(btn1) btn1.textContent = 'Create account';
+        btn2?.classList.add('hidden');
+        if($('lpTitle')) $('lpTitle').textContent = 'Create an account';
+        populateSiteSelect();
+      } else {
+        rowCreds?.classList.add('hidden');
+        rowSite?.classList.add('hidden');
+        rowName?.classList.remove('hidden');
+        btn1?.classList.add('hidden');
+        if(btn2){ btn2.classList.remove('hidden'); btn2.textContent = 'Enter site'; }
+        if($('lpTitle')) $('lpTitle').textContent = 'Create an account';
+      }
+      $('lpMsg').textContent = '';
+    }
+
+    function setLpAuthMode(mode){
+      lpAuthMode = mode;
+      const link  = document.getElementById('lpSignupLink');
+      const title = document.getElementById('lpTitle');
+      if(mode==='signup'){
+        if(link)  link.textContent  = 'Have an account? Sign in';
+        if(title) title.textContent = 'Create an account';
+        setSignupStep(1);
+      } else {
+        if(link)  link.textContent  = 'Create an account';
+        if(title) title.textContent = 'Sign in';
+        const btn = $('lpSignIn'); if(btn) btn.textContent = 'Sign in';
+        $('lpRowCreds')?.classList.remove('hidden');
+        $('lpSignupExtra')?.classList.add('hidden');
+        $('lpSignupNameRow')?.classList.add('hidden');
+        $('lpSignIn')?.classList.remove('hidden');
+        $('lpMsg').textContent = '';
+      }
+    }
+
+    async function doLogin(){
+      const email=$('lpEmail').value.trim(), password=$('lpPass').value;
+      if(!email || !password){ $('lpMsg').textContent = 'Enter email and password.'; return; }
+      $('lpMsg').textContent = 'Signing in…';
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if(error){ $('lpMsg').textContent = error.message; return; }
+      $('lpMsg').textContent='';
+      await init();
+    }
+
+    async function doSignup(){
+      const email=$('lpEmail').value.trim(), password=$('lpPass').value;
+      const full_name=($('lpName').value||'').trim();
+      const site_id = Number(($('lpSiteSelect')?.value) || 1);
+      if(!email || !password){ $('lpMsg').textContent = 'Email and password required.'; return; }
+      $('lpMsg').textContent = 'Creating account…';
+      const { data, error } = await sb.auth.signUp({
+        email, password,
+        options: { data: { site_id, full_name } }
+      });
+      if(error){ $('lpMsg').textContent = error.message; return; }
+      // Try to create profile (ignore errors if policies block it until confirmation)
+      try{
         const userId = data?.user?.id;
-        if (userId) {
-          await sb.from('profiles').insert({ user_id: userId, site_id, full_name, role: 'admin' });
+        if(userId){
+          await sb.from('profiles').insert({ user_id:userId, site_id, full_name, role:'admin' });
         }
-      } catch(_) { /* ignore insert errors (e.g., row exists or trigger handles it) */ }
-      msg.textContent = 'Account created. Check your email to confirm, then sign in.';
-      setAuthMode('login');
-    });
+      }catch(_){ /* ignore */ }
+      if(data?.session){
+        // Signed in immediately
+        $('lpMsg').textContent = 'Account created!';
+        await init();
+      }else{
+        // Email confirmation flow: stay here with a clear message, switch to login UI
+        setLpAuthMode('login');
+        $('lpMsg').textContent = `We sent a confirmation link to ${email}. Once confirmed, return here and sign in.`;
+        const btn = $('lpSignIn'); if(btn) btn.textContent = 'Sign in';
+        $('lpPass').value = '';
+      }
+    }
 
-    // --- Forgot password (sends reset email) ---
-    document.getElementById('forgotLink')?.addEventListener('click', async (e)=>{
-      e.preventDefault();
-      const email = document.getElementById('loginEmail').value.trim();
-      const msg = document.getElementById('loginMsg');
-      if (!email) { msg.textContent = 'Enter your email first.'; return; }
-      msg.textContent = 'Sending reset email…';
-      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
-      msg.textContent = error ? error.message : 'If that email exists, a reset link has been sent.';
+    $('lpSignIn').addEventListener('click', async ()=>{
+      if(lpAuthMode==='signup'){
+        const email=$('lpEmail').value.trim();
+        const password=$('lpPass').value;
+        const siteId = $('lpSiteSelect')?.value || '';
+        if(!email || !password){ $('lpMsg').textContent='Enter email and password.'; return; }
+        if(!siteId){ $('lpMsg').textContent='Please select a site.'; return; }
+        setSignupStep(2);
+        $('lpMsg').textContent = 'Almost there — add your full name.';
+        $('lpName')?.focus();
+      } else {
+        await doLogin();
+      }
+    });
+    $('lpSignIn2').addEventListener('click', async ()=>{
+      if(lpAuthMode!=='signup' || lpSignupStep!==2) return;
+      await doSignup();
+    });
+    $('lpPass').addEventListener('keydown', (e)=>{
+      if(e.key==='Enter'){
+        if(lpAuthMode==='signup' && lpSignupStep===2) $('lpSignIn2').click(); else $('lpSignIn').click();
+      }
+    });
+    document.getElementById('lpSignupLink').addEventListener('click', (e)=>{
+      e.preventDefault(); setLpAuthMode(lpAuthMode==='login' ? 'signup' : 'login');
+    });
+    document.getElementById('lpForgotLink').addEventListener('click', (e)=>{ e.preventDefault(); alert('Password reset coming soon.'); });
+
+    $('btnLogout').addEventListener('click', async ()=>{
+      try{
+        const { error } = await sb.auth.signOut({ scope: 'global' });
+        if(error){
+          // Fallback to local-only sign out so the tab is cleared even if network fails
+          await sb.auth.signOut({ scope: 'local' });
+        }
+      }catch(_){
+        try{ await sb.auth.signOut({ scope: 'local' }); }catch(__){}
+      }finally{
+        // Reset UI and show the standalone login page
+        S.user = null; S.profile = null; S.siteId = null;
+        document.querySelector('.app')?.classList.add('hidden');
+        document.getElementById('loginPage')?.classList.remove('hidden');
+        document.getElementById('who').textContent = 'Not signed in';
+        document.getElementById('site').textContent = '—';
+      }
     });
 
     // Navigation
@@ -1194,7 +1403,9 @@
 
     // Types tab
     $('addType').addEventListener('click', async ()=>{
-      const name=$('typeName').value.trim(); const category=$('typeCategory').value;
+      const name = $('typeName').value.trim();
+      const catEl = $('typeCategory');
+      const category = catEl ? catEl.value : 'general';
       if(!name) return;
       const { error } = await sb.from('check_types').insert({ site_id:S.siteId, name, category, active:true });
       if(error) return toast(error.message);
@@ -1224,13 +1435,26 @@
     });
     async function setTypeTeam(checkTypeId, teamId){
       // clear existing mapping then set if provided
-      await sb.from('check_type_teams').delete()
+      const delRes = await sb.from('check_type_teams').delete()
         .eq('site_id', S.siteId).eq('check_type_id', checkTypeId);
+      if(delRes.error){
+        if((delRes.error.message||'').includes('Could not find the table')){
+          toast('Team-owner feature is not enabled in your database (missing check_type_teams).');
+          return;
+        }
+        toast(delRes.error.message); return;
+      }
       if(teamId){
-        const { error } = await sb.from('check_type_teams').insert({
+        const insRes = await sb.from('check_type_teams').insert({
           site_id:S.siteId, check_type_id: checkTypeId, team_id: Number(teamId)
         });
-        if(error){ toast(error.message); return; }
+        if(insRes.error){
+          if((insRes.error.message||'').includes('Could not find the table')){
+            toast('Team-owner feature is not enabled in your database (missing check_type_teams).');
+            return;
+          }
+          toast(insRes.error.message); return;
+        }
       }
       await loadCheckTypeTeams(); buildTypeTeamMap(); renderTypes(); renderPlan(); renderDashboard();
       toast('Team updated');
@@ -1532,6 +1756,7 @@
     }
 
     // Kick off
+    setLpAuthMode('login');
     init();
   </script>
 </body>
