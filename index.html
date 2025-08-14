@@ -631,6 +631,8 @@
     // Keep UI in sync when auth state changes, but avoid forcing SIGNED_OUT on boot
     sb.auth.onAuthStateChange(async (event, session) => {
       logDebug('onAuthStateChange: ' + event + ' (hasSession=' + Boolean(session) + ')');
+      if(event === 'SIGNED_IN'){ __authEventTimes.signedIn = Date.now(); }
+      if(event === 'TOKEN_REFRESHED'){ __authEventTimes.tokenRefreshed = Date.now(); }
       if(event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED'){
         await init();
       }
@@ -675,6 +677,28 @@
         }catch(err){ logDebug('rescueSession error: ' + (err?.message||err)); }
       }
       return false;
+    }
+
+    // Wait for a one-off SIGNED_IN event (used to resolve login even if signInWithPassword promise hangs)
+    function waitForSignedInOnce(maxMs = 15000){
+      return new Promise((resolve, reject)=>{
+        let cleaned = false;
+        const cleanup = (sub)=>{
+          if(cleaned) return; cleaned = true;
+          try{ sub?.subscription?.unsubscribe?.(); }catch(_){ }
+        };
+        const timer = setTimeout(()=>{
+          cleanup(sub);
+          reject(new Error('SIGNED_IN event not observed in time'));
+        }, maxMs);
+        const { data: sub } = sb.auth.onAuthStateChange((event, session)=>{
+          if(event === 'SIGNED_IN' && session){
+            clearTimeout(timer);
+            cleanup(sub);
+            resolve(session);
+          }
+        });
+      });
     }
 
     function __boot(){
@@ -787,6 +811,7 @@
     function closeRoomItemsModal(){ const m=$('roomItemsModal'); if(m) m.classList.add('hidden'); }
 
     // ====== INIT & AUTH ======
+let __authEventTimes = { signedIn: 0, tokenRefreshed: 0 };
     let __initPromise = null;
     async function init(){
       if(__initPromise){ logDebug('init(): already running; reusing'); return __initPromise; }
@@ -1334,12 +1359,23 @@
       }
       logDebug('Storage in use: ' + (SB_STORAGE === window.localStorage ? 'localStorage' : SB_STORAGE === window.sessionStorage ? 'sessionStorage' : 'custom') + ' • key=' + (getAuthStorageKey() || '(none)'));
 
+// Guard against duplicate sign-in immediately after a SIGNED_IN event on reload
+if (typeof __authEventTimes !== 'undefined') {
+  const sinceSignedInMs = Date.now() - (__authEventTimes.signedIn || 0);
+  if (sinceSignedInMs < 3000) {
+    logDebug('Skipping duplicate sign-in; recent SIGNED_IN detected ' + sinceSignedInMs + 'ms ago.');
+    $('lpMsg').textContent = '';
+    await init();
+    return;
+  }
+}
+
       // If a session already exists, don't clear it — just initialise the app
       logDebug('Checking for existing session before sign-in...');
       try{
         const withTimeout = Promise.race([
           sb.auth.getSession(),
-          new Promise(res => setTimeout(()=> res({ data:{ session:null } }), 1500))
+          new Promise(res => setTimeout(()=> res({ data:{ session:null } }), 5000))
         ]);
         const { data: { session } } = await withTimeout;
         if(session){
@@ -1363,20 +1399,47 @@
       try {
         logDebug("Sending credentials to Supabase...");
 
-        // Race with a soft timeout to surface hangs
-        const timeout = new Promise((_,rej)=> setTimeout(()=> rej(new Error('Auth request timed out (15s)')),15000));
-        const signInPromise = sb.auth.signInWithPassword({ email, password });
+        // Start sign-in and also listen for the SIGNED_IN event in case the promise hangs
+        const signInPromise = sb.auth.signInWithPassword({ email, password })
+          .then(r => ({ kind: 'signIn', result: r }))
+          .catch(err => ({ kind: 'signInErr', error: err }));
+        const eventPromise = waitForSignedInOnce(15000).then(() => ({ kind: 'event' }));
+        const overallTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error('Login timed out (20s)')), 20000));
 
-        const { data, error } = await Promise.race([signInPromise, timeout]);
+        let raced;
+        try{
+          raced = await Promise.race([signInPromise, eventPromise, overallTimeout]);
+        }catch(raceErr){
+          // If the race timed out, double-check session before failing
+          const { data: { session: sessAfter } } = await sb.auth.getSession();
+          if(sessAfter){
+            logDebug('Login race timed out, but session now exists; proceeding.');
+            $('lpMsg').textContent='';
+            await init();
+            logDebug('Init complete.');
+            return;
+          }
+          throw raceErr;
+        }
 
-        logDebug("Supabase responded.");
-        if(error){
-          logDebug("Supabase error: " + JSON.stringify(error));
-          $('lpMsg').textContent = error.message || 'Login failed.';
+        if(raced?.kind === 'signIn'){
+          logDebug('Supabase responded.');
+          const { data, error } = raced.result || {};
+          if(error){
+            logDebug('Supabase error: ' + JSON.stringify(error));
+            $('lpMsg').textContent = error.message || 'Login failed.';
+            $('lpSignIn')?.removeAttribute('disabled');
+            return;
+          }
+        } else if(raced?.kind === 'event'){
+          logDebug('Auth event SIGNED_IN received; proceeding.');
+        } else if(raced?.kind === 'signInErr'){
+          logDebug('Sign-in error: ' + (raced.error?.message||raced.error));
+          $('lpMsg').textContent = (raced.error && raced.error.message) ? raced.error.message : 'Login failed.';
           $('lpSignIn')?.removeAttribute('disabled');
           return;
         }
-        logDebug('Session received: ' + (!!data?.session));
+        logDebug('Session received: ' + (!!(await sb.auth.getSession())?.data?.session));
         // Poll for session (handles rare timing where getSession lags signIn)
         let tries = 0; let sessOk = false;
         while(tries < 8){
@@ -1856,128 +1919,5 @@
     $('roomItemsClose').addEventListener('click', closeRoomItemsModal);
 
   </script>
-
-<script>
-(() => {
-  // Only run once
-  if (window.__LP_LOGIN_PATCH_APPLIED__) return;
-  window.__LP_LOGIN_PATCH_APPLIED__ = true;
-
-  const $ = (id) => document.getElementById(id);
-  const logDebug = (msg) => {
-    try {
-      const now = new Date();
-      const hh = String(now.getHours()).padStart(2,'0');
-      const mm = String(now.getMinutes()).padStart(2,'0');
-      const ss = String(now.getSeconds()).padStart(2,'0');
-      console.debug(`[${hh}:${mm}:${ss}] [patch] ${msg}`);
-    } catch {}
-  };
-
-  function waitForSignedInOnce(ms=15000) {
-    return new Promise((resolve, reject) => {
-      let timer = setTimeout(() => {
-        cleanup();
-        resolve({ timedOut: true });
-      }, ms);
-      const { data: unsub } = (window.sb?.auth || {}).onAuthStateChange?.((ev, sess) => {
-        if (ev === 'SIGNED_IN' && sess) {
-          cleanup();
-          resolve({ timedOut: false, session: sess });
-        }
-      }) || { data: { subscription: { unsubscribe(){ } } } };
-      function cleanup(){
-        try { clearTimeout(timer); } catch {}
-        try { unsub?.subscription?.unsubscribe?.(); } catch {}
-      }
-    });
-  }
-
-  async function doLoginPatched() {
-    const btn = $('lpSignIn');
-    const emailEl = $('lpEmail');
-    const passEl  = $('lpPassword');
-    if (!btn || !emailEl || !passEl) return;
-    if (window.__LP_LOGIN_IN_FLIGHT__) { logDebug('login blocked: already in flight'); return; }
-    window.__LP_LOGIN_IN_FLIGHT__ = true;
-    btn.setAttribute('disabled','disabled');
-
-    const email = emailEl.value?.trim();
-    const password = passEl.value || '';
-
-    try {
-      logDebug('LOGIN START');
-      if (!window.sb?.auth?.signInWithPassword) {
-        throw new Error('Supabase client not initialised.');
-      }
-
-      // Soft UI timeout
-      let softTimer = setTimeout(() => {
-        logDebug('soft timeout: still waiting…');
-        const msg = document.getElementById('lpMsg');
-        if (msg) msg.textContent = 'Still working…';
-      }, 15000);
-
-      // Fire sign-in and wait for SIGNED_IN event (whichever arrives effectively completes the flow)
-      const signInPromise = window.sb.auth.signInWithPassword({ email, password });
-      const eventPromise  = waitForSignedInOnce(15000);
-
-      const [{ data, error }, eventRes] = await Promise.allSettled([signInPromise, eventPromise])
-        .then(results => results.map(r => r.status === 'fulfilled' ? r.value : r.reason));
-
-      clearTimeout(softTimer);
-
-      // Handle explicit auth error
-      if (error) {
-        logDebug('Supabase error: ' + (error?.message || JSON.stringify(error)));
-        const msg = $('lpMsg'); if (msg) msg.textContent = error.message || 'Login failed.';
-        return;
-      }
-
-      // Verify session (from event or getSession)
-      let session = eventRes?.session;
-      if (!session) {
-        try {
-          const s = await window.sb.auth.getSession();
-          session = s?.data?.session || null;
-        } catch {}
-      }
-      logDebug('session ok: ' + !!session);
-
-      // Call init() if present
-      try {
-        if (typeof window.init === 'function') {
-          await window.init();
-          logDebug('init() done');
-        }
-      } catch (e) {
-        logDebug('init() error: ' + (e?.message || e));
-      }
-
-      const msg = $('lpMsg'); if (msg) msg.textContent = '';
-    } catch (err) {
-      const msg = $('lpMsg'); if (msg) msg.textContent = (err && err.message) ? err.message : 'Login failed.';
-      logDebug('unexpected error: ' + (err?.message || err));
-    } finally {
-      window.__LP_LOGIN_IN_FLIGHT__ = false;
-      btn.removeAttribute('disabled');
-    }
-  }
-
-  // Rebind click: replace node to drop any existing listeners, then add one
-  const btn = $('lpSignIn');
-  if (btn) {
-    const clone = btn.cloneNode(true);
-    btn.parentNode.replaceChild(clone, btn);
-    clone.addEventListener('click', (e) => {
-      e.preventDefault();
-      doLoginPatched();
-    }, { passive: true });
-    logDebug('login button rebound with patched handler');
-  } else {
-    logDebug('login button not found; patch loaded but not bound');
-  }
-})();
-</script>
 </body>
 </html>
