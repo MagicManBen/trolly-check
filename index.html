@@ -15,20 +15,20 @@
   // Global error handlers to surface hidden errors in debugBox
   window.addEventListener('error', (e)=>{ try{ logDebug('Window error: '+ (e?.message||e?.error?.toString()||'unknown')); }catch(_){} });
   window.addEventListener('unhandledrejection', (e)=>{ try{ logDebug('Unhandled promise rejection: ' + (e?.reason?.message||e?.reason||'unknown')); }catch(_){} });
+
   (function(){
     // Allow manual override with ?noipad in the URL
     if (new URLSearchParams(location.search).has('noipad')) return;
 
     // Detect iPad:
-    // 1) Older iPads include "iPad" in the user agent
-    // 2) iPadOS 13+ reports as "Mac" but has touch support
     const ua = navigator.userAgent || navigator.vendor || window.opera;
     const isIpadUA = /\biPad\b/i.test(ua);
     const isIpadOS = (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-    // If we're on an iPad and not already on the iPad page, redirect
-    if ((isIpadUA || isIpadOS) && !/indexIpad\.html$/i.test(location.pathname)) {
-      location.replace('indexipad.html');
+    // If we're on an iPad and not already on the iPad page, redirect (preserve ? and #)
+    if ((isIpadUA || isIpadOS) && !/indexipad\.html$/i.test(location.pathname)) {
+      const suffix = location.search + location.hash;
+      location.replace('indexipad.html' + suffix);
     }
   })();
   </script>
@@ -177,6 +177,9 @@
   <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
 </head>
 <body>
+  <!-- Debug box (dev only) -->
+  <div id="debugBox" style="position:fixed;right:8px;bottom:8px;width:360px;max-height:40vh;overflow:auto;font:12px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;background:#0b0d10;border:1px solid #2a2f36;color:#aab2bd;border-radius:8px;padding:8px;white-space:pre-wrap;z-index:2000"></div>
+
   <div id="loginPage" class="login-page">
     <div class="login-card">
       <div class="login-brand">CQC Admin</div>
@@ -202,6 +205,7 @@
       </div>
     </div>
   </div>
+
   <div class="app hidden">
     <aside class="sidebar">
       <div class="brand">CQC Admin</div>
@@ -223,8 +227,6 @@
     </aside>
 
     <main class="main">
-      <!-- LOGIN PANEL -->
-      <!-- MAIN APP PANEL -->
       <div id="panel-app" class="hidden">
         <div class="topbar">
           <div class="pill">Admin</div>
@@ -337,7 +339,6 @@
 
         <!-- ITEMS CONFIGURATOR -->
         <section id="tab-items" class="hidden">
-          <!-- ITEM PICKER FULL WIDTH -->
           <div class="card">
             <h3>Find & select an item</h3>
             <div class="row" style="margin-bottom:10px">
@@ -389,13 +390,11 @@
                       <span class="muted">Owner will be stored until we add first‑class support.</span>
                     </div>
                   </div>
-
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- OPTIONAL: legacy add/update + CSV import remain below for now -->
         </section>
 
         <!-- TEAMS -->
@@ -419,6 +418,7 @@
             </div>
           </div>
         </section>
+
         <!-- STAFF -->
         <section id="tab-staff" class="hidden">
           <div class="card">
@@ -487,34 +487,25 @@
     // ====== CONFIG ======
     const SUPABASE_URL = "https://unveoqnlqnobufhublyw.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVudmVvcW5scW5vYnVmaHVibHl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwMTcyNzYsImV4cCI6MjA3MDU5MzI3Nn0.g93OsXDpO3V9DToU7s-Z3SwBBnB84rBv0JMv-idgSME";
-    // Choose a safe storage (fallback if localStorage is blocked, e.g., Safari file://)
-    function getSafeStorage(){
-      // Prefer localStorage when running from file:// (Safari and some browsers clear sessionStorage on refresh)
-      const preferLocal = location.protocol === 'file:';
-      try{
-        if(preferLocal){
-          const k='__sb_test__';
-          window.localStorage.setItem(k,'1');
-          window.localStorage.removeItem(k);
-          return window.localStorage;
-        }
-      }catch(_){ /* fall through to sessionStorage */ }
 
+    // Choose a safe storage (fallback if localStorage/sessionStorage is blocked)
+    function getSafeStorage(){
+      // Prefer localStorage everywhere if available (more reload‑friendly)
+      try{
+        const k='__sb_test__';
+        window.localStorage.setItem(k,'1');
+        window.localStorage.removeItem(k);
+        return window.localStorage;
+      }catch(_){}
+      // Fallback to sessionStorage
       try{
         const k='__sb_test__';
         window.sessionStorage.setItem(k,'1');
         window.sessionStorage.removeItem(k);
         return window.sessionStorage;
-      }catch(_){
-        try{
-          const k='__sb_test__';
-          window.localStorage.setItem(k,'1');
-          window.localStorage.removeItem(k);
-          return window.localStorage;
-        }catch(__){
-          return { getItem(){return null;}, setItem(){}, removeItem(){} };
-        }
-      }
+      }catch(_){}
+      // Last resort no-op storage (prevents crashes)
+      return { getItem(){return null;}, setItem(){}, removeItem(){} };
     }
 
     // Compute the Supabase auth storage key (matches supabase-js v2)
@@ -528,42 +519,18 @@
       }
     }
 
-    // Best-effort: if supabase.getSession() returns null after a refresh (e.g., file:// quirks),
-    // rehydrate from whatever is persisted in SB_STORAGE.
-    async function rescueSessionFromStorage(){
-      try{
-        const key = getAuthStorageKey();
-        if(!key || !SB_STORAGE || typeof SB_STORAGE.getItem !== 'function') return false;
-        const raw = SB_STORAGE.getItem(key);
-        if(!raw) return false;
-        const parsed = JSON.parse(raw);
-        // supabase-js v2 stores { currentSession: { access_token, refresh_token, ... }, expiresAt: ... }
-        const cur = parsed?.currentSession || parsed?.session || null;
-        const access_token  = cur?.access_token  || cur?.accessToken  || null;
-        const refresh_token = cur?.refresh_token || cur?.refreshToken || null;
-        if(access_token && refresh_token){
-          await sb.auth.setSession({ access_token, refresh_token });
-          logDebug('Rescued Supabase session from storage');
-          return true;
-        }
-        return false;
-      }catch(err){
-        logDebug('rescueSessionFromStorage error: ' + (err?.message || err));
-        return false;
-      }
-    }
-
     const SB_STORAGE = getSafeStorage();
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
-        // Persist within this tab (sessionStorage). Survives refresh; clears on tab close.
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
         storage: SB_STORAGE
       }
     });
-    logDebug('Auth persistence: sessionStorage (survives refresh, clears on tab close)');
+    logDebug('Auth persistence: ' + (SB_STORAGE === window.localStorage ? 'localStorage' :
+                                     SB_STORAGE === window.sessionStorage ? 'sessionStorage' : 'custom'));
+
     // Connectivity test helper
     async function checkSupabaseConnectivity(){
       try{
@@ -576,8 +543,9 @@
         return false;
       }
     }
-// Handle email-confirmation / magic-link redirects (tokens in the URL hash)
-async function handleAuthRedirect(){
+
+    // Handle email-confirmation / magic-link redirects (tokens in the URL hash)
+    async function handleAuthRedirect(){
       try{
         const hash = window.location.hash || '';
         const hasTokens = hash.includes('access_token') && hash.includes('refresh_token');
@@ -608,30 +576,72 @@ async function handleAuthRedirect(){
           history.replaceState({}, document.title, location.pathname);
         }
       }catch(_){ /* ignore */ }
-}
+    }
 
-// Keep UI in sync when auth state changes, but avoid forcing SIGNED_OUT on boot
-sb.auth.onAuthStateChange(async (event, session) => {
-  logDebug('onAuthStateChange: ' + event + ' (hasSession=' + Boolean(session) + ')');
-  if(event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED'){
-    await init();
-  }
-  // Do NOT auto-hide the app on SIGNED_OUT here; rely on explicit logout or init() checks.
-});
-function __boot(){
-  logDebug('Booting… protocol='+location.protocol+' href='+location.href);
-  (async()=>{
-    try{
-      await handleAuthRedirect();
-    }catch(_){ /* ignore */ }
-    await init();
-  })();
-}
-if(document.readyState === 'loading'){
-  window.addEventListener('DOMContentLoaded', __boot);
-}else{
-  __boot();
-}
+    // Keep UI in sync when auth state changes, but avoid forcing SIGNED_OUT on boot
+    sb.auth.onAuthStateChange(async (event, session) => {
+      logDebug('onAuthStateChange: ' + event + ' (hasSession=' + Boolean(session) + ')');
+      if(event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED'){
+        await init();
+      }
+      // Do not auto-hide on SIGNED_OUT here; init() decides.
+    });
+
+    // Give supabase-js time to hydrate session on full reload
+    async function waitForHydration(maxMs = 1500){
+      const started = performance.now();
+      while (performance.now() - started < maxMs) {
+        const { data: { session } } = await sb.auth.getSession();
+        if (session) return session;
+        await new Promise(r => setTimeout(r, 100));
+      }
+      return null;
+    }
+
+    // Rescue session from either storage if needed
+    async function rescueSessionFromAnyStorage(){
+      const key = getAuthStorageKey();
+      if(!key) return false;
+      const stores = [SB_STORAGE, window.localStorage, window.sessionStorage]
+        .filter(Boolean)
+        .filter((v,i,self)=> self.indexOf(v) === i);
+      for (const store of stores){
+        try{
+          const raw = typeof store.getItem === 'function' ? store.getItem(key) : null;
+          if(!raw) continue;
+          const parsed = JSON.parse(raw);
+          const cur = parsed?.currentSession || parsed?.session || null;
+          const access_token  = cur?.access_token  || cur?.accessToken  || null;
+          const refresh_token = cur?.refresh_token || cur?.refreshToken || null;
+          if(access_token && refresh_token){
+            const { data, error } = await sb.auth.setSession({ access_token, refresh_token });
+            if(error){ logDebug('setSession failed while rescuing: ' + (error.message||error)); continue; }
+            if(data?.session){
+              logDebug('Rescued session from ' + (store === window.localStorage ? 'localStorage' :
+                                                  store === window.sessionStorage ? 'sessionStorage' : 'custom'));
+              return true;
+            }
+          }
+        }catch(err){ logDebug('rescueSession error: ' + (err?.message||err)); }
+      }
+      return false;
+    }
+
+    function __boot(){
+      logDebug('Booting… protocol='+location.protocol+' href='+location.href);
+      (async()=>{
+        try{
+          await handleAuthRedirect();
+        }catch(_){ /* ignore */ }
+        await init();
+      })();
+    }
+    if(document.readyState === 'loading'){
+      window.addEventListener('DOMContentLoaded', __boot);
+    }else{
+      __boot();
+    }
+
     // ====== STATE ======
     const S = {
       user: null, profile: null, siteId: null,
@@ -701,8 +711,6 @@ if(document.readyState === 'loading'){
     }
 
     function isPinSet(v){
-      // Treat PIN as set when the plain pin column has a non-empty value
-      // and is not the placeholder string 'EMPTY'.
       return typeof v === 'string' && v.trim() !== '' && v.trim().toUpperCase() !== 'EMPTY';
     }
 
@@ -726,45 +734,45 @@ if(document.readyState === 'loading'){
     }
     function closeRoomItemsModal(){ const m=$('roomItemsModal'); if(m) m.classList.add('hidden'); }
 
-   // ====== INIT & AUTH ======
-async function init(){
-  logDebug('init(): fetching session…');
+    // ====== INIT & AUTH ======
+    async function init(){
+      logDebug('init(): fetching session…');
 
-  const appEl = document.querySelector('.app');
-  const loginEl = document.getElementById('loginPage');
+      const appEl = document.querySelector('.app');
+      const loginEl = document.getElementById('loginPage');
 
-  // 1) fetch session
-  let { data: { session } } = await sb.auth.getSession();
+      // 0) Give supabase-js a moment to hydrate from storage
+      let { data: { session } } = await sb.auth.getSession();
+      if (!session) {
+        const hydrated = await waitForHydration(1500);
+        if (hydrated) session = hydrated;
+        logDebug('After hydration wait: hasSession=' + Boolean(session));
+      }
+      // 1) if still missing, try to rescue from any storage and THEN update `session`
+      if (!session) {
+        const rescued = await rescueSessionFromAnyStorage();
+        if (rescued) ({ data: { session } } = await sb.auth.getSession());
+      }
+      // 2) proceed based on the UPDATED `session`
+      if (!session) {
+        appEl?.classList.add('hidden');
+        loginEl?.classList.remove('hidden');
+        const btn = document.getElementById('lpSignIn'); if (btn) btn.disabled = false;
+        populateSiteSelect();
+        return;
+      }
 
-  // 2) if missing, try to rescue and THEN update `session`
-  if (!session) {
-    const rescued = await rescueSessionFromStorage();
-    if (rescued) {
-      // re-read session so the next check uses the fresh value
-      ({ data: { session } } = await sb.auth.getSession());
-    }
-  }
-
-  // 3) proceed based on the UPDATED `session`
-  if (!session) {
-    appEl?.classList.add('hidden');
-    loginEl?.classList.remove('hidden');
-    const btn = document.getElementById('lpSignIn'); if (btn) btn.disabled = false;
-    populateSiteSelect();
-    return;
-  }
-
-  // ... (rest of your init as-is)
-
-
+      // --- App boot after session present ---
       S.user = session.user;
       $('who').textContent = S.user.email || 'Signed in';
-      // Get profile -> site, auto-create if missing using user_metadata
+
+      // Get profile → site, auto-create if missing using user_metadata
       const { data: prof, error } = await sb
         .from('profiles')
         .select('site_id, full_name, role')
         .eq('user_id', S.user.id)
         .limit(1);
+
       if(error){
         logDebug('profiles select error: ' + (error?.message||error));
         // Fallback to user metadata when RLS blocks profiles or table is missing
@@ -790,8 +798,6 @@ async function init(){
       let profileRow = (prof && prof[0]) || null;
       if(!profileRow){
         logDebug('No profile found from select; attempting metadata/auto-create path');
-        // First login after email confirmation on a different device:
-        // use metadata captured at sign-up to create the profile now.
         const meta = (S.user && S.user.user_metadata) || {};
         const metaSite = Number(meta.site_id)||null;
         const metaName = meta.full_name || null;
@@ -813,6 +819,7 @@ async function init(){
         }
       }
       if(!profileRow){ $('site').textContent='No profile/site'; toast('No profile found — ask admin to assign your site.'); return; }
+
       S.profile = profileRow; S.siteId = S.profile.site_id;
       $('site').textContent = `Site ${S.siteId}`;
       document.getElementById('loginPage')?.classList.add('hidden');
@@ -833,6 +840,7 @@ async function init(){
       renderRooms(); renderTypes(); renderItems(); renderStaff(); renderTeams(); renderAudits(); renderDashboard();
       updateKPIs();
     }
+
     async function loadCheckStatus(){
       const { data, error } = await sb.from('v_item_check_status')
         .select('*').eq('site_id', S.siteId);
@@ -888,10 +896,8 @@ async function init(){
       requestAnimationFrame(step);
     }
     function renderDashboard(){
-      // summary badges
       const byStatus = Object.fromEntries(S.dashSummary.map(r => [r.status, r.count]));
       const ok = byStatus.ok||0, soon = byStatus.due_soon||0, late = byStatus.overdue||0, uns = byStatus.unscheduled||0;
-      // progress ring considers only scheduled items
       const scheduled = ok + soon + late;
       const pct = scheduled ? Math.round((ok / scheduled) * 100) : 0;
       setRingAnimated(pct);
@@ -911,7 +917,6 @@ async function init(){
       animateNumber($('statLate'), late);
       animateNumber($('statUnsch'), uns);
 
-      // partition lists
       const todayStart = new Date(); todayStart.setHours(0,0,0,0);
       const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
 
@@ -919,7 +924,7 @@ async function init(){
         .sort((a,b)=> new Date(a.next_due_at) - new Date(b.next_due_at));
       const dueSoon = S.dashStatus.filter(x => x.status === 'due_soon' && new Date(x.next_due_at) > todayEnd)
         .sort((a,b)=> new Date(a.next_due_at) - new Date(b.next_due_at))
-        .filter(x => (new Date(x.next_due_at) - todayEnd) <= 7*86400000); // next 7 days
+        .filter(x => (new Date(x.next_due_at) - todayEnd) <= 7*86400000);
       const dueToday = S.dashStatus.filter(x => {
         const d = new Date(x.next_due_at);
         return d >= todayStart && d <= todayEnd && (x.status === 'due_soon' || x.status === 'overdue');
@@ -1125,9 +1130,8 @@ async function init(){
         tb.appendChild(tr);
       }
     }
-    // Configurator helpers/renderers
+
     function fillOwnerRoles(){
-      // Now shows TEAMS instead of roles
       const sel=$('cfgOwnerRole'); if(!sel) return; sel.innerHTML='';
       const mk=(v,l)=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; sel.appendChild(o); };
       mk('','(none)');
@@ -1140,7 +1144,6 @@ async function init(){
       const sorted=[...S.rooms].sort((a,b)=>a.name.localeCompare(b.name));
       if(sorted.length===0) mk('', '(no rooms yet)'); else sorted.forEach(r=>mk(r.id,r.name));
     }
-    // (plan-related functions removed)
 
     function renderStaff(){
       const tb=$('staffBody'); tb.innerHTML='';
@@ -1192,7 +1195,6 @@ async function init(){
 
     async function populateSiteSelect(){
       const sel = $('lpSiteSelect'); if(!sel) return;
-      // Always refresh the list
       sel.innerHTML = '<option value="">Loading sites…</option>';
       sel.disabled = true;
       const { data, error } = await sb.from('sites').select('id,name').order('name');
@@ -1275,10 +1277,13 @@ async function init(){
       }
       logDebug('Storage in use: ' + (SB_STORAGE === window.localStorage ? 'localStorage' : SB_STORAGE === window.sessionStorage ? 'sessionStorage' : 'custom') + ' • key=' + (getAuthStorageKey() || '(none)'));
 
-      // Proactively clear any stale local session to avoid blocked second logins
+      // Only clear local scope if Supabase believes we have one (avoid races with hydration)
       try{
-        await sb.auth.signOut({ scope: 'local' });
-        logDebug('Cleared local session before sign-in.');
+        const { data: { session } } = await sb.auth.getSession();
+        if(session){
+          await sb.auth.signOut({ scope: 'local' });
+          logDebug('Cleared local session before sign-in.');
+        }
       }catch(_){ /* ignore */ }
 
       $('lpMsg').textContent = 'Signing in…';
@@ -1306,9 +1311,6 @@ async function init(){
           return;
         }
         logDebug('Session received: ' + (!!data?.session));
-        // --- Begin session persistence and polling ---
-        // Supabase will persist the session to sessionStorage automatically now.
-        logDebug('Session will persist automatically (sessionStorage).');
         // Poll for session (handles rare timing where getSession lags signIn)
         let tries = 0; let sessOk = false;
         while(tries < 8){
@@ -1318,7 +1320,6 @@ async function init(){
           tries++;
         }
         logDebug('Post-login session available: ' + sessOk + ' after ' + tries + ' checks');
-        // --- End session persistence and polling ---
         $('lpMsg').textContent='';
         logDebug("Calling init()...");
         await init();
@@ -1347,7 +1348,6 @@ async function init(){
         }
       });
       if(error){ $('lpMsg').textContent = error.message; return; }
-      // Try to create profile (ignore errors if policies block it until confirmation)
       try{
         const userId = data?.user?.id;
         if(userId){
@@ -1355,11 +1355,9 @@ async function init(){
         }
       }catch(_){ /* ignore */ }
       if(data?.session){
-        // Signed in immediately
         $('lpMsg').textContent = 'Account created!';
         await init();
       }else{
-        // Email confirmation flow: stay here with a clear message, switch to login UI
         setLpAuthMode('login');
         $('lpMsg').textContent = `We sent a confirmation link to ${email}. Once confirmed, return here and sign in.`;
         const btn = $('lpSignIn'); if(btn) btn.textContent = 'Sign in';
@@ -1400,13 +1398,11 @@ async function init(){
       try{
         const { error } = await sb.auth.signOut({ scope: 'global' });
         if(error){
-          // Fallback to local-only sign out so the tab is cleared even if network fails
           await sb.auth.signOut({ scope: 'local' });
         }
       }catch(_){
         try{ await sb.auth.signOut({ scope: 'local' }); }catch(__){}
       }finally{
-        // Reset UI and show the standalone login page
         S.user = null; S.profile = null; S.siteId = null;
         document.querySelector('.app')?.classList.add('hidden');
         document.getElementById('loginPage')?.classList.remove('hidden');
@@ -1415,17 +1411,15 @@ async function init(){
       }
     });
 
-    // Navigation
+    // Navigation & common
     document.querySelectorAll('.nav button[data-tab]').forEach(b=>b.addEventListener('click', ()=> setActiveTab(b.dataset.tab)));
     $('btnRefresh').addEventListener('click', refreshAll);
     $('globalSearch').addEventListener('input', ()=>{ renderItems(); renderAudits(); });
 
-    // Dashboard (quick adds removed) — guard in case old elements exist in cached HTML
-    const _qaAddRoom = $('qaAddRoom');
-    if(_qaAddRoom){ _qaAddRoom.addEventListener('click', ()=>{/* removed */}); }
-    const _qaAddStaff = $('qaAddStaff');
-    if(_qaAddStaff){ _qaAddStaff.addEventListener('click', ()=>{/* removed */}); }
-    function openItemInForm(code){
+    // Dashboard manage buttons
+    document.getElementById('tab-dashboard').addEventListener('click', (e)=>{
+      const b=e.target.closest('button[data-act="manageItem"]'); if(!b) return;
+      const code=b.dataset.code;
       const it=S.items.find(x=>x.item_id===code);
       if(!it){ toast('Item not found'); return; }
       setActiveTab('tab-items');
@@ -1434,7 +1428,6 @@ async function init(){
       $('cfgCodeInput').value = it.item_id;
       $('cfgCodeInput').readOnly = true;
       $('cfgName').textContent = it.item_name || '';
-      // Reset Change button and input affordances
       const _btnEC = $('cfgEnableEditCode');
       if(_btnEC){
         _btnEC.textContent = 'Change';
@@ -1447,14 +1440,9 @@ async function init(){
       if(it.room_name) $('cfgRoom').value = it.room_name;
       $('cfgOwnerRole').value = '';
       toast('Opened in configurator');
-    }
-    // Dashboard manage buttons
-    document.getElementById('tab-dashboard').addEventListener('click', (e)=>{
-      const b=e.target.closest('button[data-act="manageItem"]'); if(!b) return;
-      const code=b.dataset.code; openItemInForm(code);
     });
 
-    // Rooms tab
+    // Rooms tab actions
     $('addRoom').addEventListener('click', async ()=>{
       const name=$('roomName').value.trim(); if(!name) return;
       const { error } = await sb.from('rooms').insert({ site_id:S.siteId, name });
@@ -1467,10 +1455,8 @@ async function init(){
       const tr = btn.closest('tr');
 
       if(act==='viewItems'){
-        // find room & items in that room
         const room = S.rooms.find(rr=>rr.id===id);
         const roomName = room?.name || btn.getAttribute('data-room-name') || 'Room';
-        // Use either room_id or fallback to string match
         const items = (S.items||[])
           .filter(it => (it.room_id === id) || (it.room_name === roomName))
           .map(it => it.item_name);
@@ -1483,7 +1469,6 @@ async function init(){
         const text = tr.querySelector('.owner-text');
         const cancelBtn = tr.querySelector('button[data-act="cancelOwner"]');
 
-        // Enter edit mode
         if(btn.dataset.mode !== 'save'){
           btn.dataset.mode = 'save';
           btn.textContent = 'Save';
@@ -1496,7 +1481,6 @@ async function init(){
           return;
         }
 
-        // Save mode
         const newOwner = sel.value ? Number(sel.value) : null;
         const { error } = await sb.from('rooms').update({ occupied_by: newOwner }).eq('id', id).eq('site_id', S.siteId);
         if(error){ toast(error.message); return; }
@@ -1570,7 +1554,6 @@ async function init(){
       }
     });
     async function setTypeTeam(checkTypeId, teamId){
-      // clear existing mapping then set if provided
       const delRes = await sb.from('check_type_teams').delete()
         .eq('site_id', S.siteId).eq('check_type_id', checkTypeId);
       if(delRes.error){
@@ -1592,7 +1575,7 @@ async function init(){
           toast(insRes.error.message); return;
         }
       }
-      await loadCheckTypeTeams(); buildTypeTeamMap(); renderTypes(); renderPlan(); renderDashboard();
+      await loadCheckTypeTeams(); buildTypeTeamMap(); renderTypes(); renderDashboard();
       toast('Team updated');
     }
     $('typesBody').addEventListener('change', async (e)=>{
@@ -1623,13 +1606,12 @@ async function init(){
       if(act==='delTeam'){
         const id = Number(b.getAttribute('data-id'));
         if(!confirm('Delete this team?')) return;
-        // clean up mappings and members
         await sb.from('team_members').delete().eq('team_id', id).eq('site_id', S.siteId);
         await sb.from('check_type_teams').delete().eq('team_id', id).eq('site_id', S.siteId);
         const { error } = await sb.from('teams').delete().eq('id', id).eq('site_id', S.siteId);
         if(error) return toast(error.message);
         await Promise.all([loadTeams(), loadTeamMembers(), loadCheckTypeTeams()]);
-        buildTypeTeamMap(); renderTeams(); renderTypes(); renderPlan(); renderDashboard(); toast('Team deleted');
+        buildTypeTeamMap(); renderTeams(); renderTypes(); renderDashboard(); toast('Team deleted');
       }
       if(act==='addMember'){
         const teamId = Number(b.getAttribute('data-team'));
@@ -1684,7 +1666,6 @@ async function init(){
         $('cfgCodeInput').value = it.item_id;
         $('cfgCodeInput').readOnly = true;
         $('cfgName').textContent = it.item_name || '';
-        // Reset Change button and input affordances
         const _btnEC = $('cfgEnableEditCode');
         if(_btnEC){
           _btnEC.textContent = 'Change';
@@ -1698,18 +1679,37 @@ async function init(){
       }
     });
 
-
-
+    // Code edit toggle
+    $('cfgEnableEditCode').addEventListener('click', ()=>{
+      const btn = $('cfgEnableEditCode');
+      const input = $('cfgCodeInput');
+      if(btn.dataset.mode !== 'save'){
+        btn.dataset.mode = 'save';
+        btn.textContent = 'Save code';
+        btn.classList.add('save-glow');
+        input.readOnly = false;
+        input.classList.add('edit-pulse');
+        input.focus();
+        input.select();
+      }else{
+        input.readOnly = true;
+        btn.dataset.mode = 'change';
+        btn.textContent = 'Change';
+        btn.classList.remove('save-glow');
+        input.classList.remove('edit-pulse');
+        toast('Code staged (save details to persist).');
+      }
+    });
 
     // Save details (room + owner role)
     $('cfgSaveDetails').addEventListener('click', async ()=>{
       if(!S.selectedItem) return;
       const roomName = $('cfgRoom').value;
       const ownerRole = $('cfgOwnerRole').value;
-      // Save room via existing RPC
+      const itemId = $('cfgCodeInput').value.trim();
       const { error } = await sb.rpc('admin_upsert_item', {
         p_site_id: S.siteId,
-        p_item_id: $('cfgCodeInput').value.trim(),
+        p_item_id: itemId,
         p_item_name: S.selectedItem.item_name,
         p_room_name: roomName,
         p_category: S.selectedItem.category,
@@ -1718,11 +1718,10 @@ async function init(){
       });
       if(error) return toast(error.message);
       await loadItems();
-      // refresh selected
-      S.selectedItem = S.items.find(x=>x.item_id===S.selectedItem.item_id);
+      S.selectedItem = S.items.find(x=>x.item_id===itemId);
       toast('Details saved');
     });
-
+    $('cfgClose').addEventListener('click', closeCfgModal);
 
     // Staff tab
     $('addStaff').addEventListener('click', async ()=>{
@@ -1730,141 +1729,66 @@ async function init(){
       if(!full_name) return;
       const { error } = await sb.from('kiosk_users').insert({ site_id:S.siteId, full_name, role });
       if(error) return toast(error.message);
-      $('staffName').value=''; await loadStaff(); renderStaff(); updateKPIs(); toast('Staff added');
+      $('staffName').value='';
+      await loadStaff(); renderStaff(); updateKPIs(); toast('Staff added');
     });
     $('staffBody').addEventListener('click', async (e)=>{
       const b=e.target.closest('button'); if(!b) return;
-      const id=Number(b.dataset.id), act=b.dataset.act;
+      const id = Number(b.dataset.id); const act = b.dataset.act;
       if(act==='setPin'){
-        const p = prompt('Enter new 4-digit PIN'); if(!p) return;
-        const { error } = await sb.rpc('set_kiosk_user_pin', { p_user_id:id, p_site_id:S.siteId, p_pin:p });
+        const pin = prompt('Enter new PIN (4-6 digits)'); if(pin===null) return;
+        if(!/^\d{4,6}$/.test(pin)){ toast('PIN must be 4–6 digits'); return; }
+        const { error } = await sb.from('kiosk_users').update({ pin }).eq('id', id).eq('site_id', S.siteId);
         if(error) return toast(error.message);
-        // Also persist the plain PIN so the UI (which reads the plain column) stays in sync
-        await sb.from('kiosk_users').update({ pin: p }).eq('id', id).eq('site_id', S.siteId);
-        await loadStaff(); renderStaff(); toast('PIN set');
+        await loadStaff(); renderStaff(); toast('PIN updated');
       }
       if(act==='renameStaff'){
-        const row=S.staff.find(x=>x.id===id); const name=prompt('New name', row?.full_name||''); if(!name) return;
+        const row = S.staff.find(s=>s.id===id);
+        const name = prompt('New name', row?.full_name||''); if(!name) return;
         const { error } = await sb.from('kiosk_users').update({ full_name:name }).eq('id', id).eq('site_id', S.siteId);
         if(error) return toast(error.message);
         await loadStaff(); renderStaff(); toast('Renamed');
       }
       if(act==='roleStaff'){
-        const row=S.staff.find(x=>x.id===id); const role=prompt('Role (admin/staff)', row?.role||'staff'); if(!role) return;
-        const { error } = await sb.from('kiosk_users').update({ role }).eq('id', id).eq('site_id', S.siteId);
+        const row = S.staff.find(s=>s.id===id);
+        const role = prompt('Role ("staff" or "admin")', row?.role||'staff'); if(!role) return;
+        if(!/^(staff|admin)$/i.test(role)){ toast('Role must be "staff" or "admin"'); return; }
+        const { error } = await sb.from('kiosk_users').update({ role:role.toLowerCase() }).eq('id', id).eq('site_id', S.siteId);
         if(error) return toast(error.message);
         await loadStaff(); renderStaff(); toast('Role updated');
       }
       if(act==='delStaff'){
         if(!confirm('Delete this staff member?')) return;
+        await sb.from('team_members').delete().eq('user_id', id).eq('site_id', S.siteId);
         const { error } = await sb.from('kiosk_users').delete().eq('id', id).eq('site_id', S.siteId);
         if(error) return toast(error.message);
-        await loadStaff(); renderStaff(); updateKPIs(); toast('Staff deleted');
+        await Promise.all([loadStaff(), loadTeamMembers()]); renderStaff(); renderTeams(); toast('Staff deleted');
       }
     });
 
-    // Audits
-    $('refreshAudits').addEventListener('click', async ()=>{ await loadAudits(); renderAudits(); });
+    // Audits tab
     $('auditSearch').addEventListener('input', renderAudits);
+    $('refreshAudits').addEventListener('click', async ()=>{ await loadAudits(); renderAudits(); });
     $('exportAudits').addEventListener('click', ()=>{
-      const rows = S.audits.map(a=>({
-        submitted_at: a.submitted_at,
-        staff_name: a.staff_name,
-        scanned_code: a.scanned_code,
-        item_name: a.item_name,
-        room: a.room,
-        check_type: a.check_type,
-        check_value: a.check_value
-      }));
-      const csv = Papa.unparse(rows);
-      download(`audits_site_${S.siteId}.csv`, csv);
+      const rows = S.audits || [];
+      if(rows.length === 0){ toast('Nothing to export'); return; }
+      const header = ['When','Staff','Code','Item','Room','Type','Value'];
+      const csvRows = [header.join(',')].concat(rows.map(a => [
+        JSON.stringify(fmtDate(a.submitted_at)),
+        JSON.stringify(a.staff_name||''),
+        JSON.stringify(a.scanned_code||''),
+        JSON.stringify(a.item_name||''),
+        JSON.stringify(a.room||''),
+        JSON.stringify(a.check_type||''),
+        JSON.stringify(a.check_value||'')
+      ].join(',')));
+      download(`audits_site_${S.siteId}.csv`, csvRows.join('\n'));
+      toast('Exported CSV');
     });
 
-    // Initial picker listeners
-    const _itemRoomEl = $('itemRoom'); if(_itemRoomEl){ _itemRoomEl.addEventListener('change', ()=>{}); }
-    const _itemTypeEl = $('itemType'); if(_itemTypeEl){ _itemTypeEl.addEventListener('change', ()=>{}); }
+    // Modal and misc close handlers
+    $('roomItemsClose').addEventListener('click', closeRoomItemsModal);
 
-    // Modal close listeners
-    const _cfgClose = $('cfgClose'); if(_cfgClose){ _cfgClose.addEventListener('click', closeCfgModal); }
-    const _cfgModal = $('cfgModal'); if(_cfgModal){ _cfgModal.addEventListener('click', (e)=>{ if(e.target===_cfgModal) closeCfgModal(); }); }
-    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeCfgModal(); });
-    document.addEventListener('keydown', (e)=>{
-      if(e.key === '`'){
-        const box = document.getElementById('debugBox');
-        if(!box) return;
-        const hidden = box.classList.toggle('hidden');
-        if(!hidden) box.scrollTop = box.scrollHeight;
-      }
-    });
-    const _riClose = $('roomItemsClose'); if(_riClose){ _riClose.addEventListener('click', closeRoomItemsModal); }
-    const _riModal = $('roomItemsModal'); if(_riModal){ _riModal.addEventListener('click', (e)=>{ if(e.target===_riModal) closeRoomItemsModal(); }); }
-    const _cfgEnableEditCode = $('cfgEnableEditCode');
-    if(_cfgEnableEditCode){
-      _cfgEnableEditCode.dataset.mode = 'change';
-      _cfgEnableEditCode.addEventListener('click', async ()=>{
-        const btn = _cfgEnableEditCode;
-        const inp = $('cfgCodeInput');
-        if(!inp) return;
-        // Enter edit mode
-        if(btn.dataset.mode !== 'save'){
-          btn.dataset.mode = 'save';
-          btn.textContent = 'Save';
-          btn.classList.add('save-glow');
-          inp.readOnly = false;
-          inp.classList.add('edit-pulse');
-          inp.focus();
-          inp.select();
-          return;
-        }
-        // Save mode
-        const newCode = (inp.value||'').trim();
-        if(!S.selectedItem){ toast('No item selected'); return; }
-        if(!newCode){ toast('Code required'); return; }
-        // If unchanged, just exit edit mode gracefully
-        if(newCode === S.selectedItem.item_id){
-          btn.dataset.mode = 'change';
-          btn.textContent = 'Change';
-          btn.classList.remove('save-glow');
-          inp.readOnly = true;
-          inp.classList.remove('edit-pulse');
-          return;
-        }
-        btn.disabled = true;
-        try{
-          const { error } = await sb.rpc('admin_upsert_item', {
-            p_site_id: S.siteId,
-            p_item_id: newCode,
-            p_item_name: S.selectedItem.item_name,
-            p_room_name: $('cfgRoom').value,
-            p_category: S.selectedItem.category,
-            p_default_check_type_name: S.selectedItem.default_check_type_name || null,
-            p_comments: S.selectedItem.comments || null
-          });
-          if(error) throw error;
-          await loadItems();
-          S.selectedItem = S.items.find(x => x.item_id === newCode) || S.selectedItem;
-          renderItems();
-          toast('Item ID saved');
-          // Exit edit mode
-          btn.dataset.mode = 'change';
-          btn.textContent = 'Change';
-          btn.classList.remove('save-glow');
-          inp.readOnly = true;
-          inp.classList.remove('edit-pulse');
-        }catch(err){
-          console.error(err);
-          toast(err.message || 'Save failed');
-        }finally{
-          btn.disabled = false;
-        }
-      });
-    }
-
-    // Kick off
-    if(location.protocol === 'file:'){
-      logDebug('Note: Running from file://. Some browsers restrict storage on the null origin. Use a local web server (e.g., `python3 -m http.server`) and open http://localhost:8000/.');
-    }
-</script><truncated__content/>
-</script>
-
-  <pre id="debugBox" class="hidden" style="position:fixed;right:12px;bottom:12px;width:36vw;max-width:520px;height:28vh;overflow:auto;padding:8px 10px;background:#0f1216;border:1px solid var(--line);border-radius:8px;white-space:pre-wrap"></pre>
+  </script>
+</body>
+</html>
