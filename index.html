@@ -1688,4 +1688,105 @@ if(document.readyState === 'loading'){
         await loadStaff(); renderStaff(); toast('Role updated');
       }
       if(act==='delStaff'){
-        if(!confirm('Delete th<truncated__content/>
+        if(!confirm('Delete this staff member?')) return;
+        const { error } = await sb.from('kiosk_users').delete().eq('id', id).eq('site_id', S.siteId);
+        if(error) return toast(error.message);
+        await loadStaff(); renderStaff(); updateKPIs(); toast('Staff deleted');
+      }
+    });
+
+    // Audits
+    $('refreshAudits').addEventListener('click', async ()=>{ await loadAudits(); renderAudits(); });
+    $('auditSearch').addEventListener('input', renderAudits);
+    $('exportAudits').addEventListener('click', ()=>{
+      const rows = S.audits.map(a=>({
+        submitted_at: a.submitted_at,
+        staff_name: a.staff_name,
+        scanned_code: a.scanned_code,
+        item_name: a.item_name,
+        room: a.room,
+        check_type: a.check_type,
+        check_value: a.check_value
+      }));
+      const csv = Papa.unparse(rows);
+      download(`audits_site_${S.siteId}.csv`, csv);
+    });
+
+    // Initial picker listeners
+    const _itemRoomEl = $('itemRoom'); if(_itemRoomEl){ _itemRoomEl.addEventListener('change', ()=>{}); }
+    const _itemTypeEl = $('itemType'); if(_itemTypeEl){ _itemTypeEl.addEventListener('change', ()=>{}); }
+
+    // Modal close listeners
+    const _cfgClose = $('cfgClose'); if(_cfgClose){ _cfgClose.addEventListener('click', closeCfgModal); }
+    const _cfgModal = $('cfgModal'); if(_cfgModal){ _cfgModal.addEventListener('click', (e)=>{ if(e.target===_cfgModal) closeCfgModal(); }); }
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeCfgModal(); });
+    const _riClose = $('roomItemsClose'); if(_riClose){ _riClose.addEventListener('click', closeRoomItemsModal); }
+    const _riModal = $('roomItemsModal'); if(_riModal){ _riModal.addEventListener('click', (e)=>{ if(e.target===_riModal) closeRoomItemsModal(); }); }
+    const _cfgEnableEditCode = $('cfgEnableEditCode');
+    if(_cfgEnableEditCode){
+      _cfgEnableEditCode.dataset.mode = 'change';
+      _cfgEnableEditCode.addEventListener('click', async ()=>{
+        const btn = _cfgEnableEditCode;
+        const inp = $('cfgCodeInput');
+        if(!inp) return;
+        // Enter edit mode
+        if(btn.dataset.mode !== 'save'){
+          btn.dataset.mode = 'save';
+          btn.textContent = 'Save';
+          btn.classList.add('save-glow');
+          inp.readOnly = false;
+          inp.classList.add('edit-pulse');
+          inp.focus();
+          inp.select();
+          return;
+        }
+        // Save mode
+        const newCode = (inp.value||'').trim();
+        if(!S.selectedItem){ toast('No item selected'); return; }
+        if(!newCode){ toast('Code required'); return; }
+        // If unchanged, just exit edit mode gracefully
+        if(newCode === S.selectedItem.item_id){
+          btn.dataset.mode = 'change';
+          btn.textContent = 'Change';
+          btn.classList.remove('save-glow');
+          inp.readOnly = true;
+          inp.classList.remove('edit-pulse');
+          return;
+        }
+        btn.disabled = true;
+        try{
+          const { error } = await sb.rpc('admin_upsert_item', {
+            p_site_id: S.siteId,
+            p_item_id: newCode,
+            p_item_name: S.selectedItem.item_name,
+            p_room_name: $('cfgRoom').value,
+            p_category: S.selectedItem.category,
+            p_default_check_type_name: S.selectedItem.default_check_type_name || null,
+            p_comments: S.selectedItem.comments || null
+          });
+          if(error) throw error;
+          await loadItems();
+          S.selectedItem = S.items.find(x => x.item_id === newCode) || S.selectedItem;
+          renderItems();
+          toast('Item ID saved');
+          // Exit edit mode
+          btn.dataset.mode = 'change';
+          btn.textContent = 'Change';
+          btn.classList.remove('save-glow');
+          inp.readOnly = true;
+          inp.classList.remove('edit-pulse');
+        }catch(err){
+          console.error(err);
+          toast(err.message || 'Save failed');
+        }finally{
+          btn.disabled = false;
+        }
+      });
+    }
+
+    // Kick off
+    setLpAuthMode('login');
+    init();
+  </script>
+</body>
+</html>
