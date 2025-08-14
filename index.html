@@ -2,1691 +2,1033 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>CQC Admin — Sites, Rooms, Items, Staff</title>
+  <title>CQC - PIN Portal (Supabase)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <script>
-  (function(){
-    // Allow manual override with ?noipad in the URL
-    if (new URLSearchParams(location.search).has('noipad')) return;
-
-    // Detect iPad:
-    // 1) Older iPads include "iPad" in the user agent
-    // 2) iPadOS 13+ reports as "Mac" but has touch support
-    const ua = navigator.userAgent || navigator.vendor || window.opera;
-    const isIpadUA = /\biPad\b/i.test(ua);
-    const isIpadOS = (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
-    // If we're on an iPad and not already on the iPad page, redirect
-    if ((isIpadUA || isIpadOS) && !/indexIpad\.html$/i.test(location.pathname)) {
-      location.replace('indexipad.html');
-    }
-  })();
-  </script>
   <style>
-    :root{
-      --bg:#0e0f11; --panel:#181a1e; --muted:#9aa0a6; --text:#e8eaed; --accent:#22c55e; --danger:#ef4444;
-      --card:#111317; --line:#272a30; --btn:#2a2f36; --warn:#f59e0b;
+    :root {
+      --bg: #0e0f11; --panel:#181a1e; --muted:#9aa0a6; --text:#e8eaed; --accent:#22c55e; --danger:#ef4444;
+      --card:#111317; --line:#272a30; --btn:#2a2f36;
     }
-    *{box-sizing:border-box}
-    html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,system-ui,Segoe UI,Roboto,Arial,sans-serif}
-    .app{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
-    .sidebar{background:var(--panel);border-right:1px solid var(--line);padding:16px;position:sticky;top:0;height:100vh}
-    .brand{font-weight:800;font-size:18px;margin-bottom:12px}
-    .status{font-size:12px;color:var(--muted);margin-bottom:16px}
-    .nav button{width:100%;text-align:left;background:transparent;border:1px solid var(--line);color:var(--text);padding:10px 12px;border-radius:10px;margin-bottom:8px;cursor:pointer}
-    .nav button.active{background:var(--accent);border-color:transparent;color:#04130a;font-weight:700}
-    .main{padding:18px 18px 80px}
-    .row{display:flex;gap:10px;align-items:center}
-    .grid{display:grid;gap:12px}
-    .grid.cols-2{grid-template-columns:1fr 1fr}
-    .grid.cols-3{grid-template-columns:1fr 1fr 1fr}
-    .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
-    .card h3{margin:0 0 10px 0}
-    .muted{color:var(--muted)}
-    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--btn);border:1px solid var(--line);color:var(--text);padding:10px 12px;border-radius:10px;cursor:pointer}
-    .btn.primary{background:var(--accent);border-color:transparent;color:#04130a;font-weight:700}
-    .btn.warn{background:var(--warn);border-color:transparent;color:#111}
-    .btn.danger{background:var(--danger);border-color:transparent}
-    .btn.small{padding:6px 8px;border-radius:8px;font-size:12px}
-    input, select, textarea{background:#0f1216;border:1px solid var(--line);color:var(--text);border-radius:10px;padding:10px 12px;width:100%}
-    textarea{min-height:70px;resize:vertical}
-    table{width:100%;border-collapse:collapse}
-    th, td{padding:10px;border-bottom:1px solid var(--line);text-align:left;font-size:14px}
-    th{color:var(--muted);background:#121419;position:sticky;top:0}
-    .tools{display:flex;gap:8px;flex-wrap:wrap}
-    .topbar{position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center;padding:10px 0 14px 0;background:linear-gradient(to bottom, rgba(0,0,0,.3), transparent)}
-    .pill{padding:6px 10px;border:1px solid var(--line);border-radius:999px;background:#1e232b;font-size:12px}
-    .right{display:flex;gap:8px;align-items:center}
-    .hidden{display:none !important}
-    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:#0f1216;border:1px solid var(--line);padding:10px 14px;border-radius:10px}
-    .danger-text{color:var(--danger)}
-    .success-text{color:var(--accent)}
-    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-    .hr{border-top:1px solid var(--line);margin:12px 0}
-    .table-wrap{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card);max-height:60vh;overflow:auto}
-    .chip{padding:4px 8px;border:1px solid var(--line);border-radius:999px;font-size:12px;background:#1e232b;cursor:pointer}
-    .chip:hover{background:#222}
-    .tag{padding:2px 8px;border:1px solid var(--line);border-radius:999px;font-size:12px;background:#1e232b}
-    .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-    .kpi > div{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
-    .kpi .big{font-size:24px;font-weight:800}
-    .right input[type="text"]{width:220px}
-    .danger-row{background:rgba(239,68,68,.08)}
-    .ok-row{background:rgba(34,197,94,.08)}
-    /* --- DASHBOARD --- */
-    .dash-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-    .dash-title{font-weight:800;letter-spacing:.2px}
-    .stat-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-    .stat-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;position:relative;overflow:hidden}
-    .stat-card .label{color:var(--muted);font-size:12px}
-    .stat-card .value{font-size:26px;font-weight:900}
-    .stat-card.ok::after{content:"";position:absolute;inset:0;background:radial-gradient(600px 80px at -10% -40%, rgba(34,197,94,.18), transparent)}
-    .stat-card.warn::after{content:"";position:absolute;inset:0;background:radial-gradient(600px 80px at -10% -40%, rgba(245,158,11,.18), transparent)}
-    .stat-card.danger::after{content:"";position:absolute;inset:0;background:radial-gradient(600px 80px at -10% -40%, rgba(239,68,68,.18), transparent)}
-    .ring{--p:0; width:64px;height:64px;border-radius:50%;background:
-      conic-gradient(var(--accent) calc(var(--p)*1%), #222 0);
-      display:grid;place-items:center;border:1px solid var(--line)}
-    .ring .inner{width:46px;height:46px;border-radius:50%;background:#0f1216;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700}
-    .ring.small{width:42px;height:42px}.ring.small .inner{width:30px;height:30px;font-size:11px}
-    .status-badges{display:flex;gap:8px;flex-wrap:wrap}
-    .badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--line);border-radius:999px;font-size:12px;background:#1e232b}
-    .badge .dot{width:8px;height:8px;border-radius:50%}
-    .dot.ok{background:var(--accent)}
-    .dot.soon{background:var(--warn)}
-    .dot.late{background:var(--danger)}
-    .list-mini{display:flex;flex-direction:column;gap:8px;max-height:48vh;overflow:auto}
-    .mini{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
-    .mini:hover{background:#111317}
-    .mini .left{display:flex;flex-direction:column}
-    .mini .title{font-weight:700}
-    .mini .sub{color:var(--muted);font-size:12px}
-    .mini .right{display:flex;align-items:center;gap:10px}
-    .pulse{animation:pulse 2s ease-in-out infinite}
-    @keyframes pulse{0%,100%{opacity:.85}50%{opacity:1}}
-    .glow-red{box-shadow:0 0 0 0 rgba(239,68,68,.5);animation:glowRed 2s ease-in-out infinite}
-    @keyframes glowRed{0%{box-shadow:0 0 0 0 rgba(239,68,68,.55)}70%{box-shadow:0 0 24px 12px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
-    .glow-amber{box-shadow:0 0 0 0 rgba(245,158,11,.5);animation:glowAmber 2s ease-in-out infinite}
-    @keyframes glowAmber{0%{box-shadow:0 0 0 0 rgba(245,158,11,.55)}70%{box-shadow:0 0 24px 12px rgba(245,158,11,0)}100%{box-shadow:0 0 0 0 rgba(245,158,11,0)}}
+    * { box-sizing: border-box; }
+    html, body { margin:0; padding:0; height:100%; background:var(--bg); color:var(--text); font-family: -apple-system, system-ui, Segoe UI, Roboto, Arial, sans-serif; }
+    .wrap { min-height:100%; display:flex; align-items:center; justify-content:center; padding:24px; }
+    .panel { width: min(520px, 95vw); background:var(--panel); border-radius:20px; padding:24px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+    h1,h2,h3 { margin:0 0 12px; }
+    .muted { color:var(--muted); font-size:14px; }
+    .center { text-align:center; }
+    .hidden { display:none !important; }
+    .btn { display:inline-flex; justify-content:center; align-items:center; padding:12px 16px; border-radius:12px; background:var(--btn); border:1px solid var(--line); color:var(--text); cursor:pointer; }
+    .btn:active { transform: translateY(1px); }
+    .btn.primary { background:var(--accent); border-color:transparent; color:#04130a; font-weight:600; }
+    .btn.danger { background:var(--danger); border-color:transparent; }
+    .grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; width:min(360px, 92%); margin:8px auto 0; }
+    .pad { margin-top:14px; }
+    .key { height:64px; padding:0; border-radius:12px; background:#2f3339; text-align:center; font-weight:700; font-size:26px; border:1px solid #3a3f46; box-shadow: inset 0 2px 0 rgba(0,0,0,.35); display:flex; align-items:center; justify-content:center; }
+    .key:active { transform: scale(.98); }
+    .pin-dots { display:flex; gap:8px; justify-content:center; margin:10px 0 6px; }
+    .dot { width:14px; height:14px; border-radius:50%; background:#30363f; }
+    .dot.filled {
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent), 0 0 16px rgba(34, 197, 94, 0.6);
+    }
+    /* --- PIN success glow --- */
+    .dot.flash-success {
+      animation: pinSuccessGlow 0.5s ease-in-out;
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--accent), 0 0 24px rgba(34, 197, 94, 0.9), 0 0 40px rgba(34, 197, 94, 0.75);
+    }
+    @keyframes pinSuccessGlow {
+      0%   { transform: scale(1);   box-shadow: 0 0 8px var(--accent), 0 0 16px rgba(34,197,94,.6); }
+      50%  { transform: scale(1.25); box-shadow: 0 0 16px var(--accent), 0 0 36px rgba(34,197,94,1); }
+      100% { transform: scale(1);   box-shadow: 0 0 8px var(--accent), 0 0 16px rgba(34,197,94,.6); }
+    }
+    /* --- PIN error flash --- */
+    .dot.flash-error {
+      animation: pinErrorFlash 0.5s ease-in-out;
+      background: var(--danger);
+      box-shadow: 0 0 10px var(--danger), 0 0 24px rgba(239, 68, 68, 0.95), 0 0 40px rgba(239, 68, 68, 0.85);
+    }
+    @keyframes pinErrorFlash {
+      0%   { transform: scale(1);   box-shadow: 0 0 8px var(--danger), 0 0 16px rgba(239,68,68,.6); }
+      50%  { transform: scale(1.2); box-shadow: 0 0 16px var(--danger), 0 0 36px rgba(239,68,68,1); }
+      100% { transform: scale(1);   box-shadow: 0 0 8px var(--danger), 0 0 16px rgba(239,68,68,.6); }
+    }
+    .row { display:flex; gap:10px; }
+    input[type=text], input[type=password], select { background:#0f1216; border:1px solid var(--line); color:var(--text); border-radius:10px; padding:10px 12px; width:100%; }
+    table { width:100%; border-collapse: collapse; margin-top:10px; }
+    th, td { border-bottom:1px solid var(--line); padding:10px; text-align:left; }
 
-    /* Standard amend→save affordances */
-    .save-glow{box-shadow:0 0 0 0 rgba(34,197,94,.55);animation:glowGreen 2s ease-in-out infinite}
-    @keyframes glowGreen{0%{box-shadow:0 0 0 0 rgba(34,197,94,.55)}70%{box-shadow:0 0 24px 12px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
-    .edit-pulse{border-color:var(--accent)!important;box-shadow:0 0 0 0 rgba(34,197,94,.45);animation:pulseGreen 1.8s ease-in-out infinite}
-    @keyframes pulseGreen{0%{box-shadow:0 0 0 0 rgba(34,197,94,.45)}70%{box-shadow:0 0 20px 10px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+    /* Review screen polish */
+    .review-intro { margin-top:6px; }
+    table.review-table thead th { font-weight:600; letter-spacing:.2px; color:var(--muted); background: #121419; }
+    table.review-table tbody tr:hover { background:#111317; }
+    table.review-table {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      display: block;
+      background: var(--card); /* match app card style */
+    }
+    table.review-table thead, table.review-table tbody, table.review-table tr { display:table; width:100%; table-layout:fixed; }
+    table.review-table thead { position:sticky; top:0; z-index:1; }
 
-    /* Desktop-friendly dashboard grid + extras */
-    .hero-grid{display:grid;grid-template-columns:2fr 3fr;gap:12px}
-    .stat-grid{display:grid;grid-template-columns:repeat(4,minmax(140px,1fr));gap:12px}
-    .ring.lg{width:120px;height:120px}
-    .ring.lg .inner{width:92px;height:92px;font-size:18px}
-    .empty{color:var(--muted);padding:6px 0}
-    .fade-in{animation:fadeIn .5s ease}
-    @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-    @media (max-width:1100px){
-      .hero-grid{grid-template-columns:1fr}
-      .stat-grid{grid-template-columns:repeat(2,1fr)}
+    /* --- Taller, easier-to-tap dropdown on Review screen --- */
+    select.rowType{
+      min-height: 48px;
+      padding: 10px 12px;
+      font-size: 16px;
+      border-radius: 12px;
+      line-height: 1.2;
+    }
+    select.rowType:focus{
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(34,197,94,.35), 0 0 12px rgba(34,197,94,.25);
+      border-color: var(--accent);
     }
 
-    /* Modal */
-    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:1000}
-    .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:960px;width:min(960px,90vw);max-height:85vh;overflow:auto;padding:14px}
-    .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-    .modal-full{width:min(1400px,96vw);height:92vh;display:flex;flex-direction:column}
-    .modal-body{flex:1;overflow:auto;padding:8px 2px}
-    .modal-header{position:sticky;top:0;background:var(--panel);border-bottom:1px solid var(--line);padding-bottom:10px;z-index:2}
-    .title-lg{font-size:22px;font-weight:800}
-    .title-lg.green{color:#39ff14}
-    .modal-header.center-title{justify-content:center;text-align:center}
-    .modal-header.center-title .right{position:absolute;right:20px;top:20px}
-    .code-chip{padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:#0f1216}
-    .modal .grid.cols-2{grid-template-columns:1.2fr 1fr}
-    .modal input,.modal select,.modal textarea{font-size:16px}
-    .modal .table-wrap{max-height:48vh}
-    .modal .tools .btn.small{font-size:12px;padding:6px 8px}
+    /* --- Grouping by Room (Review table) --- */
+    tr.group-row td{
+      padding: 10px 14px;
+      background: linear-gradient(to right, rgba(34,197,94,.12), rgba(34,197,94,0));
+      border-bottom: 1px solid var(--line);
+      position: sticky; /* sticks at top of the scrollable tbody */
+      top: 0;          /* relative to the tbody scroll container */
+      z-index: 0;      /* under the table header which has z-index:1 */
+    }
+    .group-head{
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+    }
+    .group-head .left{
+      display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:.2px;
+    }
+    .group-head .room-dot{
+      width:10px; height:10px; border-radius:50%; background: var(--accent);
+      box-shadow: 0 0 10px var(--accent), 0 0 22px rgba(34,197,94,.5);
+    }
+    .group-head .room-name{ font-weight:700; }
+    .group-head .room-count{
+      font-size:12px; color:var(--muted); padding:2px 8px; border:1px solid var(--line);
+      border-radius:9999px;
+    }
 
-    /* Standalone login page */
-    .login-page{display:grid;place-items:center;min-height:100vh;padding:24px}
-    .login-card{width:min(420px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
-    .login-brand{font-weight:800;margin-bottom:8px}
-    .login-row{display:grid;gap:10px}
-    /* Themed select + focus */
-    .login-card input:focus, .login-card select:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(34,197,94,.22); }
-    .select-wrap{ position:relative; }
-    .select-wrap select{ appearance:none; -webkit-appearance:none; -moz-appearance:none; padding-right:36px; }
-    .select-wrap::after{ content:'▾'; position:absolute; right:12px; top:50%; transform:translateY(-50%); pointer-events:none; color:var(--muted); font-size:14px; }
+    tr.group-item td{ border-left: 3px solid rgba(34,197,94,.35); }
+    tr.group-item:hover td{ background:#111317; }
 
-    /* Bottom action pills */
-    .link-row{ display:flex; gap:8px; justify-content:space-between; align-items:center; }
-    .link-pill{ background:transparent; border:1px solid var(--line); color:var(--muted); border-radius:999px; padding:8px 12px; cursor:pointer; }
-    .link-pill:hover{ color:var(--text); border-color:#3a3f47; }
-    /* Themed links (avoid default blue) */
-    .login-card a{ color: var(--muted); text-decoration: none; }
-    .login-card a:hover{ color: var(--text); text-decoration: underline; }
+    /* Dim repeated room cells inside groups */
+    td.room-cell{ color: var(--muted); font-size: 13px; }
+
+    /* --- Review screen layout: fill viewport on iPad portrait --- */
+    #screen-review .panel {
+      width: min(820px, 96vw);
+      display: flex;
+      flex-direction: column;
+      /* Fill almost full viewport height, accounting for topbar + outer padding */
+      min-height: calc(100vh - 72px);
+    }
+    #screen-review h2.glow {
+      /* Neon green (no animation) to match app accent */
+      color: var(--accent);
+      text-shadow: 0 0 12px rgba(34,197,94,.8), 0 0 24px rgba(34,197,94,.45);
+    }
+    /* Table stretches to fill available space; body scrolls */
+    #screen-review #reviewTable {
+      flex: 1 1 auto;
+      display: block;
+      height: 100%;
+      min-height: 0; /* allow flex child to shrink properly on iPad Safari */
+      background: var(--card);
+    }
+    #screen-review #reviewTable tbody {
+      display: block;
+      overflow: auto;
+      height: 100%;
+      min-height: 100%; /* ensure the table area fills even with few rows */
+    }
+    #screen-review #reviewTable thead,
+    #screen-review #reviewTable tr {
+      width: 100%;
+      table-layout: fixed;
+      display: table;
+    }
+    /* Actions row sticks to bottom via flex */
+    #screen-review .review-actions{
+      margin-top:auto;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      gap:12px;
+    }
+    /* Bigger submit */
+    #btnSubmit.big{ padding:16px 28px; font-size:1.15rem; border-radius:14px; }
+    /* Compact icon button for remove (matches app buttons but smaller) */
+    .btn.icon { padding: 6px 10px; min-width: 36px; height: 36px; font-size: 20px; line-height: 1; border-radius: 10px; }
+    .topbar { position:fixed; left:0; right:0; top:0; padding:10px 16px; display:flex; justify-content:space-between; align-items:center; background:linear-gradient(to bottom, rgba(0,0,0,.5), transparent); }
+    .pill { padding:6px 10px; background:#1e232b; border:1px solid var(--line); border-radius:999px; font-size:12px; }
+    .toast { position:fixed; left:50%; transform:translateX(-50%); bottom:28px; background:#0f1216; border:1px solid var(--line); padding:10px 14px; border-radius:10px; color:#fff; }
+    .hr { border-top:1px solid var(--line); margin:14px 0; }
+    .list { max-height: 260px; overflow:auto; border:1px solid var(--line); border-radius:10px; padding:10px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .art { margin: 16px auto 4px; display:flex; justify-content:center; gap:12px; flex-wrap:wrap; }
+    .art img { max-width: 360px; width: 90%; height: auto; border-radius: 12px; border:1px solid var(--line); background:#0f1216; }
+    .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: center; }
+    @media (max-width: 720px) { .twocol { grid-template-columns: 1fr; } }
+
+    /* --- Upload screen enhancements --- */
+    #screen-upload h2 {
+      font-size: clamp(1.6rem, 4vw, 2.2rem);
+      animation: pulseTitle 2s ease-in-out infinite;
+    }
+    @keyframes pulseTitle {
+      0%,100% { text-shadow: 0 0 8px rgba(34,197,94,.6); color: var(--accent); }
+      50% { text-shadow: 0 0 18px rgba(34,197,94,.9); color: #b8f5b8; }
+    }
+    #qrUploadWrap {
+      position: relative;
+      padding: 14px;
+      border-radius: 16px;
+      background: var(--card);
+      box-shadow: 0 0 16px rgba(34,197,94,.3), inset 0 0 18px rgba(34,197,94,.15);
+      animation: glowQR 2.4s ease-in-out infinite;
+    }
+    @keyframes glowQR {
+      0%, 100% { box-shadow: 0 0 16px rgba(34,197,94,.3), inset 0 0 18px rgba(34,197,94,.15); transform: scale(1); }
+      50% { box-shadow: 0 0 28px rgba(34,197,94,.5), inset 0 0 26px rgba(34,197,94,.25); transform: scale(1.03); }
+    }
+    #screen-upload .muted {
+      font-size: 1.05rem;
+      animation: fadeHint 3.2s ease-in-out infinite;
+    }
+    @keyframes fadeHint {
+      0%,100% { opacity: 0.8; }
+      50% { opacity: 1; }
+    }
+    .glow { text-shadow: 0 2px 0 rgba(0,0,0,.6), 0 0 18px rgba(255,255,255,.35); }
+    .btn.light { background:#ffffff; border-color:#d1d5db; color:#111; font-weight:600; box-shadow: 0 8px 24px rgba(0,0,0,.25), 0 0 0 0 rgba(34,197,94,.0); }
+    .btn.light:active { transform: translateY(1px); }
+    #btnBegin {
+      position: relative;
+      background: var(--accent) !important;
+      border-color: transparent !important;
+      color: #04130a !important;
+      font-weight: 700;
+      padding: 16px 22px;           /* bigger button */
+      font-size: 1.1rem;            /* slightly larger text */
+      border-radius: 14px;          /* a touch rounder */
+      box-shadow: 0 10px 30px rgba(34,197,94,.55), 0 0 12px rgba(34,197,94,.45);
+    }
+    #btnBegin::after {
+      content: "";
+      position: absolute;
+      inset: -10px;                 /* larger halo */
+      border-radius: 18px;          /* match larger rounding */
+      pointer-events: none;
+      box-shadow: 0 0 0 0 rgba(34,197,94,.60);
+      animation: btnPulse 1.8s ease-in-out infinite; /* faster, more obvious */
+    }
+    #btnSubmit {
+      position: relative;
+      background: var(--accent) !important;
+      border-color: transparent !important;
+      color: #04130a !important;
+      font-weight: 700;
+      box-shadow: 0 10px 30px rgba(34,197,94,.55), 0 0 12px rgba(34,197,94,.45);
+    }
+    #btnSubmit::after {
+      content: "";
+      position: absolute;
+      inset: -10px;                 /* larger halo like Begin */
+      border-radius: 18px;          /* match rounding */
+      pointer-events: none;
+      box-shadow: 0 0 0 0 rgba(34,197,94,.60);
+      animation: btnPulse 1.8s ease-in-out infinite;
+    }
+    @keyframes btnPulse {
+      0%   { box-shadow: 0 0 0 0 rgba(34,197,94,.60); }
+      60%  { box-shadow: 0 0 36px 26px rgba(34,197,94,0); }
+      100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+    }
+    .fab { position: fixed; right: 22px; bottom: 22px; width:56px; height:56px; border-radius:50%; background: var(--accent); border: none; color:#04130a; font-size:28px; display:flex; justify-content:center; align-items:center; box-shadow: 0 10px 26px rgba(34,197,94,.40); }
+    .footer { position: fixed; bottom: 10px; left:0; right:0; text-align:center; color: var(--muted); }
+    /* --- Audit in progress hero --- */
+    .audit-hero{
+      position:relative;
+      height:100vh;
+      width:100%;
+      display:grid;
+      grid-template-rows: 1fr 1fr; /* top half ring + text, bottom half images */
+      align-items:center;
+      justify-items:center;
+      overflow:hidden;
+      padding-top:40px;
+    }
+    .audit-center{
+      position:relative;
+      z-index:200;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:18px;
+      padding:32px 16px;
+      text-align:center;
+      width:100%;
+      max-width:780px;
+    }
+    .audit-top{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      width:100%;
+      height:100%;
+    }
+    .audit-bottom{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      width:100%;
+      height:100%;
+      padding: 8px 0 24px;
+    }
+    .audit-ring{
+      position:relative;
+      width:min(78vw,380px);
+      height:min(78vw,380px);
+      border-radius:50%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      z-index:180;
+    }
+    .audit-ring:before,
+    .audit-ring:after{
+      content:"";
+      position:absolute; inset:0; border-radius:50%;
+    }
+    .audit-ring:before{
+      border:6px solid #1e8c1e;
+      box-shadow:inset 0 0 40px rgba(30,140,30,.35), 0 0 26px rgba(30,140,30,.25);
+      animation:pulseExpand 1.6s ease-in-out infinite;
+    }
+    .audit-ring:after{
+      content:"";
+      position:absolute; inset:-10px; border-radius:50%;
+      border:0;
+      box-shadow:0 0 0 0 rgba(30,140,30,.5);
+      animation:ripple 1.6s ease-out infinite;
+    }
+    .audit-title{
+      position:absolute;
+      text-align:center;
+      padding:0 24px;
+      z-index:220;
+    }
+    .audit-title .big{
+      font-size:clamp(1.6rem, 3.8vw, 2.2rem);
+      font-weight:900;
+      letter-spacing:.3px;
+      text-shadow:0 2px 10px rgba(0,0,0,.6);
+    }
+    .audit-title .sub{
+      margin-top:8px;
+      font-size:clamp(1rem, 2.4vw, 1.15rem);
+      color:#d3ffd3;
+      line-height:1.35;
+    }
+    /* --- Upload counter (green flowing) --- */
+    .upload-counter{
+      position:relative;
+      width:220px; height:220px;
+      border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .upload-counter:before{
+      content:"";
+      position:absolute; inset:0; border-radius:50%;
+      border:6px solid #1e8c1e;
+      box-shadow:inset 0 0 40px rgba(30,140,30,.35), 0 0 26px rgba(30,140,30,.25);
+      animation:pulseExpand 1.6s ease-in-out infinite;
+    }
+    .upload-counter:after{
+      content:"";
+      position:absolute; inset:-10px; border-radius:50%;
+      border:0;
+      box-shadow:0 0 0 0 rgba(30,140,30,.5);
+      animation:ripple 1.6s ease-out infinite;
+    }
+    .upload-title{ position:absolute; text-align:center; padding:0 12px; z-index:5; }
+    .upload-title .num{ font-size:clamp(1.8rem, 5vw, 2.8rem); font-weight:900; color:#d3ffd3; text-shadow:0 2px 10px rgba(0,0,0,.6); }
+    .upload-title .sub{ margin-top:4px; font-size:clamp(.9rem, 2.2vw, 1rem); color:#b8f5b8; }
+    @keyframes pulseExpand{
+      0%{ transform:scale(.95) }
+      50%{ transform:scale(1.05) }
+      100%{ transform:scale(.95) }
+    }
+    @keyframes ripple{
+      0%{ box-shadow:0 0 0 0 rgba(30,140,30,.5); opacity:1 }
+      100%{ box-shadow:0 0 0 24px rgba(30,140,30,0); opacity:0 }
+    }
+    .scan-bottom{
+      display:block;
+      max-width:min(70vw, 420px);
+      width:90%;
+      height:auto;
+      opacity:1;
+      pointer-events:auto;
+      margin:0 auto;
+    }
+    /* --- Final reset emphasis (bigger text, same QR size) --- */
+    #screen-reset h2 { font-size: clamp(2rem, 6vw, 2.6rem); }
+    #screen-reset #resetInstruction { font-size: clamp(1.2rem, 4vw, 1.6rem); }
+    #screen-reset #resetCountdown { font-size: clamp(1.1rem, 3.6vw, 1.4rem); }
+    #screen-reset #btnResetDone { font-size: 1.15rem; padding: 14px 22px; }
+    /* Keep QR at library default (220px) */
+    #screen-reset #qrReset canvas, #screen-reset #qrReset img { width: 220px !important; height: 220px !important; }
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
-  <div id="loginPage" class="login-page hidden">
-    <div class="login-card">
-      <div class="login-brand">CQC Admin</div>
-      <h2 id="lpTitle" style="margin:6px 0 14px 0">Sign in</h2>
-      <div id="lpRowCreds" class="login-row">
-        <input id="lpEmail" type="email" placeholder="email@example.com" autocomplete="username" />
-        <input id="lpPass" type="password" placeholder="Password" autocomplete="current-password" />
-      </div>
-      <div id="lpSignupExtra" class="login-row hidden" style="margin-top:10px">
-        <div class="select-wrap"><select id="lpSiteSelect"></select></div>
-      </div>
-      <div id="lpPrimaryRow" class="login-row" style="margin-top:10px">
-        <button class="btn primary" id="lpSignIn">Sign in</button>
-      </div>
-      <div id="lpSignupNameRow" class="login-row hidden" style="margin-top:10px">
-        <input id="lpName" type="text" placeholder="Full name" />
-        <button class="btn primary" id="lpSignIn2">Enter site</button>
-      </div>
-      <div id="lpMsg" class="muted" style="margin-top:8px"></div>
-      <div class="link-row" style="margin-top:12px">
-        <button class="link-pill" id="lpSignupLink">Create an account</button>
-        <button class="link-pill" id="lpForgotLink">Forgot password?</button>
-      </div>
+  <div class="topbar">
+    <div class="pill" id="status">Not signed in</div>
+    <div class="row">
+      <button class="btn" id="btnLogout">Logout</button>
     </div>
   </div>
-  <div class="app">
-    <aside class="sidebar">
-      <div class="brand">CQC Admin</div>
-      <div class="status">
-        <div id="who">Not signed in</div>
-        <div id="site" class="muted">—</div>
-      </div>
-      <div class="nav">
-        <button data-tab="tab-dashboard" class="active">Dashboard</button>
-        <button data-tab="tab-rooms">Rooms</button>
-        <button data-tab="tab-types">Check Types</button>
-        <button data-tab="tab-items">Items</button>
-        <button data-tab="tab-staff">Staff</button>
-        <button data-tab="tab-teams">Teams</button>
-        <button data-tab="tab-audits">Audit Log</button>
-        <div class="hr"></div>
-        <button id="btnLogout">Logout</button>
-      </div>
-    </aside>
 
-    <main class="main">
-      <!-- LOGIN PANEL -->
-      <!-- MAIN APP PANEL -->
-      <div id="panel-app" class="hidden">
-        <div class="topbar">
-          <div class="pill">Admin</div>
-          <div class="right">
-            <input id="globalSearch" type="text" placeholder="Global search…">
-            <button class="btn" id="btnRefresh">Refresh</button>
+  <div class="wrap" id="screen-login">
+    <div class="panel center">
+      <h1>Staff Portal</h1>
+      <p class="muted">Sign in (one-time) with your email & password. Then staff use a 4‑digit PIN.</p>
+      <div class="pad">
+        <input id="loginEmail" type="text" placeholder="email@example.com">
+      </div>
+      <div class="pad">
+        <input id="loginPass" type="password" placeholder="Password">
+      </div>
+      <div class="pad">
+        <button class="btn primary" id="doLogin">Sign in</button>
+      </div>
+      <p id="loginMsg" class="muted"></p>
+    </div>
+  </div>
+
+  <div class="wrap hidden" id="screen-pin">
+    <div class="panel center">
+      <h2>Enter 4 digit PIN</h2>
+      <div class="pin-dots">
+        <div class="dot" id="d1"></div><div class="dot" id="d2"></div><div class="dot" id="d3"></div><div class="dot" id="d4"></div>
+      </div>
+      <div class="grid pad" id="pad">
+        <div class="key">1</div><div class="key">2</div><div class="key">3</div>
+        <div class="key">4</div><div class="key">5</div><div class="key">6</div>
+        <div class="key">7</div><div class="key">8</div><div class="key">9</div>
+        <div class="key" style="grid-column:2">0</div>
+      </div>
+      <div class="pad"><button class="btn" id="btnClearPin">Clear</button></div>
+      <div class="art"><img src="WristBand.png" alt="Wrist band / safety reminder"></div>
+      <p id="pinMsg" class="muted"></p>
+    </div>
+  </div>
+
+  <div class="wrap hidden" id="screen-begin">
+    <div class="panel center">
+      <h2 class="glow">Press the circle button on the scanner once and wait for 2 beeps</h2>
+      <p class="muted">After 2 beeps, click the BEGIN button below</p>
+      <div class="art"><img id="imgDoubleDeep" src="DoubleDeep.png" alt="Press the handheld once"></div>
+      <div class="pad"><button class="btn light" id="btnBegin">Begin</button></div>
+    </div>
+  </div>
+
+
+  <div class="wrap hidden" id="screen-scanning">
+    <div class="panel center" style="background:transparent; box-shadow:none; width:100%; padding:0;">
+      <div class="audit-hero">
+        <div class="audit-top">
+          <div class="audit-center">
+            <div class="audit-ring" aria-hidden="true">
+              <div class="audit-title">
+                <div class="big">Audit in progress</div>
+                <div class="sub">Scan the QR on each item as you check it.<br>When finished, return to this iPad.</div>
+              </div>
+            </div>
           </div>
         </div>
-
-        <!-- DASHBOARD -->
-        <section id="tab-dashboard">
-          <div class="dash-header">
-            <div class="dash-title">Overview</div>
-          </div>
-
-          <div class="hero-grid">
-            <div class="card">
-              <div class="row" style="gap:18px;align-items:center">
-                <div class="ring lg" id="ringProgress"><div class="inner" id="ringInner">0%</div></div>
-                <div>
-                  <div class="muted">Scheduled checks</div>
-                  <div class="dash-big" style="font-size:22px;font-weight:800;margin-top:4px" id="dashProgressText">—</div>
-                  <div class="muted" style="font-size:12px;margin-top:6px">*of all scheduled items currently within their required window</div>
-                </div>
-              </div>
-            </div>
-
-            <div class="card">
-              <div class="stat-grid">
-                <div class="stat-card ok fade-in">
-                  <div class="label">OK</div>
-                  <div class="value" id="statOk">—</div>
-                </div>
-                <div class="stat-card warn fade-in">
-                  <div class="label">Due soon</div>
-                  <div class="value" id="statSoon">—</div>
-                </div>
-                <div class="stat-card danger fade-in">
-                  <div class="label">Overdue</div>
-                  <div class="value" id="statLate">—</div>
-                </div>
-                <div class="stat-card fade-in">
-                  <div class="label">Unscheduled</div>
-                  <div class="value" id="statUnsch">—</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="grid cols-2" style="margin-top:12px">
-            <div class="card">
-              <div class="row" style="justify-content:space-between;align-items:center">
-                <h3>Overdue</h3>
-                <div class="status-badges" id="dashBadges"></div>
-              </div>
-              <div class="list-mini" id="dashOverdueBody"></div>
-            </div>
-
-            <div class="card">
-              <h3>Due soon (next 7 days)</h3>
-              <div class="list-mini" id="dashSoonBody"></div>
-            </div>
-          </div>
-
-          <div class="card" style="margin-top:12px">
-            <h3>Due today</h3>
-            <div class="list-mini" id="dashTodayBody"></div>
-          </div>
-        </section>
-
-        <!-- ROOMS -->
-        <section id="tab-rooms" class="hidden">
-          <div class="card">
-            <h3>Add room</h3>
-            <div class="row">
-              <input id="roomName" type="text" placeholder="Room name">
-              <button class="btn primary" id="addRoom">Add</button>
-            </div>
-          </div>
-          <div class="card">
-            <h3>Rooms</h3>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>Name</th><th>Owner</th><th>Actions</th></tr></thead>
-                <tbody id="roomsBody"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- CHECK TYPES -->
-        <section id="tab-types" class="hidden">
-          <div class="card">
-            <h3>Add check type</h3>
-            <div class="grid cols-2">
-              <input id="typeName" type="text" placeholder="Name (e.g., Date Check)">
-              <button class="btn primary" id="addType">Add</button>
-            </div>
-          </div>
-          <div class="card">
-            <h3>Check types</h3>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>Name</th><th>Team</th><th>Active</th><th>Actions</th></tr></thead>
-                <tbody id="typesBody"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- ITEMS CONFIGURATOR -->
-        <section id="tab-items" class="hidden">
-          <!-- ITEM PICKER FULL WIDTH -->
-          <div class="card">
-            <h3>Find & select an item</h3>
-            <div class="row" style="margin-bottom:10px">
-              <input id="itemSearch" type="text" placeholder="Search by code, name, room…">
-              <button class="btn" id="refreshItems">Refresh</button>
-            </div>
-            <div class="table-wrap" style="max-height:42vh">
-              <table>
-                <thead><tr><th style="width:140px">Code</th><th>Name</th><th>Room</th><th></th></tr></thead>
-                <tbody id="itemsBody"></tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- Configuration Modal -->
-          <div id="cfgModal" class="modal-overlay hidden">
-            <div class="modal modal-full" role="document">
-              <div class="modal-header center-title">
-                <div>
-                  <div class="title-lg green" id="cfgName">—</div>
-                </div>
-                <div class="right">
-                  <button class="btn" id="cfgClose">Close</button>
-                </div>
-              </div>
-              <div class="modal-body">
-                <div id="itemConfig">
-                  <div class="card" style="margin:0 0 10px 0">
-                    <h3>Details</h3>
-                    <div class="grid cols-2">
-                      <div>
-                        <div class="muted">Item ID (code)</div>
-                        <div class="row" style="gap:8px">
-                          <input id="cfgCodeInput" type="text" readonly>
-                          <button class="btn small" id="cfgEnableEditCode">Change</button>
-                        </div>
-                      </div>
-                      <div>
-                        <div class="muted">Room</div>
-                        <select id="cfgRoom"></select>
-                      </div>
-                      <div>
-                        <div class="muted">Owner (team)</div>
-                        <select id="cfgOwnerRole"></select>
-                      </div>
-                    </div>
-                    <div class="row" style="margin-top:10px;justify-content:flex-start">
-                      <button class="btn primary" id="cfgSaveDetails">Save details</button>
-                      <span class="muted">Owner will be stored until we add first‑class support.</span>
-                    </div>
-                  </div>
-
-                  <div class="card" style="margin:0">
-                    <h3>Check plan</h3>
-                    <div class="grid cols-3" style="align-items:end">
-                      <div>
-                        <div class="muted">Check type</div>
-                        <select id="planTypeNew"></select>
-                      </div>
-                      <div>
-                        <div class="muted">Frequency (interval)</div>
-                        <input id="planFreqNew" type="text" placeholder="e.g., 1 week">
-                      </div>
-                      <div class="row" style="gap:8px">
-                        <button class="btn primary" id="planAdd">Add check</button>
-                        <div class="tools">
-                          <button class="btn small" data-quick="1 week">1w</button>
-                          <button class="btn small" data-quick="2 weeks">2w</button>
-                          <button class="btn small" data-quick="1 month">1m</button>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div class="table-wrap" style="margin-top:10px">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Type</th><th>Owner team</th><th>Frequency</th><th>Warn before</th><th>Required</th><th>Active</th><th></th>
-                          </tr>
-                        </thead>
-                        <tbody id="planBody"></tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- OPTIONAL: legacy add/update + CSV import remain below for now -->
-        </section>
-
-        <!-- TEAMS -->
-        <section id="tab-teams" class="hidden">
-          <div class="card">
-            <h3>Add team</h3>
-            <div class="row">
-              <input id="teamName" type="text" placeholder="Team name (e.g., Nurses)">
-              <button class="btn primary" id="addTeam">Add</button>
-            </div>
-          </div>
-          <div class="card">
-            <h3>Teams</h3>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr><th>Name</th><th>Members</th><th>Add member</th><th>Actions</th></tr>
-                </thead>
-                <tbody id="teamsBody"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-        <!-- STAFF -->
-        <section id="tab-staff" class="hidden">
-          <div class="card">
-            <h3>Add staff</h3>
-            <div class="grid cols-3">
-              <input id="staffName" type="text" placeholder="Full name">
-              <select id="staffRole">
-                <option value="staff">staff</option>
-                <option value="admin">admin</option>
-              </select>
-              <button class="btn primary" id="addStaff">Add</button>
-            </div>
-          </div>
-          <div class="card">
-            <h3>Staff</h3>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>Name</th><th>Role</th><th>Teams</th><th>PIN</th><th>Actions</th></tr></thead>
-                <tbody id="staffBody"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- AUDITS -->
-        <section id="tab-audits" class="hidden">
-          <div class="card">
-            <h3>Audit log</h3>
-            <div class="tools" style="margin-bottom:8px">
-              <input id="auditSearch" type="text" placeholder="Search (name, item, code, type)">
-              <button class="btn" id="refreshAudits">Refresh</button>
-              <button class="btn" id="exportAudits">Export CSV</button>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>When</th><th>Staff</th><th>Code</th><th>Item</th><th>Room</th><th>Type</th><th>Value</th>
-                  </tr>
-                </thead>
-                <tbody id="auditsBody"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-      </div>
-    </main>
-  </div>
-
-  <div id="toast" class="toast hidden"></div>
-
-  <!-- Room Items Modal -->
-  <div id="roomItemsModal" class="modal-overlay hidden">
-    <div class="modal" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <div class="title-lg" id="roomItemsTitle">Items in room</div>
-        <div class="right"><button class="btn" id="roomItemsClose">Close</button></div>
-      </div>
-      <div class="modal-body">
-        <div id="roomItemsList" class="list-mini"></div>
+        <div class="audit-bottom">
+          <img id="imgScanTrolly" src="ScanTrolly2.png" alt="Scan items during your round" class="scan-bottom">
+        </div>
       </div>
     </div>
   </div>
 
+  <div class="wrap hidden" id="screen-review">
+    <div class="panel center" style="width:min(820px, 96vw)">
+      <h2 class="glow">Review & Submit</h2>
+      <table id="reviewTable" class="review-table"><thead><tr><th>Name</th><th>Room</th><th>Check Type</th><th></th></tr></thead><tbody></tbody></table>
+      <div class="hr"></div>
+      <div class="review-actions">
+        <button class="btn primary big" id="btnSubmit">Submit</button>
+      </div>
+      <p id="submitMsg" class="muted"></p>
+    </div>
+  </div>
+
+  <div class="wrap hidden" id="screen-upload">
+    <div class="panel center">
+      <h2>When you have finished...</h2>
+      <p class="muted">Scan this QR code.</p>
+      <div class="twocol">
+        <div class="art"><img src="IPADSCAN.png" alt="Use the iPad to upload from handheld" id="imgIpadScan"></div>
+        <div>
+          <div class="art" id="qrUploadWrap"><div id="qrUpload"></div></div>
+          <p id="uploadStatus" class="muted hidden">Captured: <span id="capCount">0</span></p>
+        </div>
+      </div>
+      <input
+  id="uploadInput"
+  autocomplete="off"
+  autocapitalize="off"
+  spellcheck="false"
+  inputmode="none"
+  style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;"
+/>
+    </div>
+  </div>
+
+  <div class="wrap hidden" id="screen-reset">
+    <div class="panel center">
+      <h2 class="glow">Final reset</h2>
+      <p class="muted" id="resetInstruction">Scan this QR to finish.</p>
+      <div class="art"><div id="qrReset" aria-label="Final reset QR code"></div></div>
+      <p class="muted" id="resetCountdown"></p>
+      <div class="pad"><button class="btn primary" id="btnResetDone">Done</button></div>
+    </div>
+  </div>
+
+
+  <div class="footer">User: <span id="footerWho">—</span></div>
+  <div id="toast" class="toast hidden"></div>
+
   <script>
-    // ====== CONFIG ======
     const SUPABASE_URL = "https://unveoqnlqnobufhublyw.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVudmVvcW5scW5vYnVmaHVibHl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwMTcyNzYsImV4cCI6MjA3MDU5MzI3Nn0.g93OsXDpO3V9DToU7s-Z3SwBBnB84rBv0JMv-idgSME";
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-// Handle email-confirmation / magic-link redirects (tokens in the URL hash)
-async function handleAuthRedirect(){
-  try{
-    const hash = window.location.hash || '';
-    if(hash.includes('access_token')){
-      const p = new URLSearchParams(hash.substring(1));
-      const access_token  = p.get('access_token');
-      const refresh_token = p.get('refresh_token');
-      if(access_token && refresh_token){
-        await sb.auth.setSession({ access_token, refresh_token });
-      }
-      // Clean the URL so the hash doesn’t linger
-      history.replaceState({}, document.title, location.pathname + location.search);
-    }
-  }catch(_){ /* ignore */ }
-}
 
-// Keep UI in sync when auth state changes (e.g., right after confirm-email redirect)
-sb.auth.onAuthStateChange(async (event) => {
-  if(event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED'){
-    await init();
-  }
-  if(event === 'SIGNED_OUT'){
-    document.querySelector('.app')?.classList.add('hidden');
-    document.getElementById('loginPage')?.classList.remove('hidden');
-  }
-});
-window.addEventListener('DOMContentLoaded', ()=>{
-  handleAuthRedirect().then(()=> init());
-});
-    // ====== STATE ======
-    const S = {
-      user: null, profile: null, siteId: null,
-      rooms: [], types: [], typesByCat: {}, items: [], staff: [], audits: [],
-      dashStatus: [], dashSummary: [],
-      teams: [], teamMembers: [], checkTypeTeams: [],
-      typeTeamById: {}, typeTeamByName: {}
-    };
-    S.selectedItem = null;
-    S.selectedItemPlan = [];
+    // Production: always use authenticated client for reads
+    function readClient(){ return sb; }
 
-    // ====== HELPERS ======
-    function $(id){ return document.getElementById(id); }
-    function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),1600); }
-    function fmtDate(s){ try{ return new Date(s).toLocaleString(); }catch(_){ return s; } }
-    function setActiveTab(id){
-      document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active', b.dataset.tab===id));
-      document.querySelectorAll('section[id^="tab-"]').forEach(s=>s.classList.add('hidden'));
-      $(id)?.classList.remove('hidden');
-    }
-    function updateKPIs(){
-      const r=$('kpiRooms'); if(r) r.textContent = S.rooms.length;
-      const t=$('kpiTypes'); if(t) t.textContent = S.types.length;
-      const i=$('kpiItems'); if(i) i.textContent = S.items.length;
-      const s=$('kpiStaff'); if(s) s.textContent = S.staff.length;
-    }
-    function buildTypesByCat(){
-      S.typesByCat = {};
-      for (const t of S.types.filter(x=>x.active !== false)){
-        if (!S.typesByCat[t.category]) S.typesByCat[t.category] = [];
-        S.typesByCat[t.category].push(t);
+    // State
+    const S = { siteId: null, user: null, staff: null, scans: [], itemsById: new Map(), types: [], typesByCategory: {} };
+
+    // Helpers
+    function $(id) { return document.getElementById(id); }
+    let currentScreen = 'screen-login';
+    function setTopbarFor(id){
+      if (id === 'screen-begin') startDoubleDeepCycle(); else stopDoubleDeepCycle();
+      if (id === 'screen-scanning') startScanTrollyCycle(); else stopScanTrollyCycle();
+      currentScreen = id;
+      const btn = $('btnLogout');
+      if (!btn) return;
+
+      // Show Exit Audit only on these screens: begin, scanning, upload, review
+      const showExit = (id === 'screen-begin' || id === 'screen-scanning' || id === 'screen-upload' || id === 'screen-review');
+      btn.style.display = showExit ? 'inline-flex' : 'none';
+      btn.textContent = showExit ? 'Exit Audit' : 'Logout';
+
+      // Manage persistent focus for the hidden upload input
+      if (id === 'screen-upload') {
+        startUploadFocusLoop();
+      } else {
+        stopUploadFocusLoop();
+        // Ensure the hidden upload input cannot steal focus on other screens (iPad keyboard issue)
+        const u = $('uploadInput');
+        if (u) u.blur();
       }
-      for(const k in S.typesByCat){ S.typesByCat[k].sort((a,b)=>a.name.localeCompare(b.name)); }
+
     }
-    function fillItemPickers(){
-      // Legacy form removed — safely bail if controls don't exist
-      const rSel = $('itemRoom');
-      const tSel = $('itemType');
-      const catEl = $('itemCategory');
-      if(!rSel || !tSel || !catEl) return;
-      // Rooms
-      rSel.innerHTML = '';
-      const rOpt = (id, name)=>{ const o=document.createElement('option'); o.value=name; o.textContent=name; rSel.appendChild(o); };
-      const sortedRooms = [...S.rooms].sort((a,b)=>a.name.localeCompare(b.name));
-      if(sortedRooms.length===0){ rOpt('', '(no rooms yet)'); } else { sortedRooms.forEach(r=>rOpt(r.id, r.name)); }
-      // Types (by selected category)
-      const cat = catEl.value || 'general';
-      tSel.innerHTML = '';
-      const types = S.typesByCat[cat] || S.typesByCat['general'] || [];
-      if(types.length===0){
-        const o=document.createElement('option'); o.value=''; o.textContent='(no types for '+cat+')'; tSel.appendChild(o);
-      }else{
-        for(const t of types){ const o=document.createElement('option'); o.value=t.name; o.textContent=t.name; tSel.appendChild(o); }
+
+    function show(id) {
+      ['screen-login','screen-pin','screen-begin','screen-scanning','screen-upload','screen-review','screen-reset']
+        .forEach(x => $(x).classList.add('hidden'));
+      $(id).classList.remove('hidden');
+      setTopbarFor(id);
+    }
+    function toast(msg) { const t=$('toast'); t.textContent=msg; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'), 1600); }
+    // Disable Submit when no check types are available
+    function guardSubmitForTypes(){
+      const b = document.getElementById('btnSubmit');
+      const m = document.getElementById('submitMsg');
+      if (!b) return;
+      // At least one category has types
+      const ok = S.typesByCategory && Object.values(S.typesByCategory).some(arr => Array.isArray(arr) && arr.length > 0);
+      b.disabled = !ok;
+      if (!ok && m) m.textContent = 'No check types available for this site. Please contact an admin.';
+      else if (m) m.textContent = '';
+    }
+    const sleep = (ms)=> new Promise(r=>setTimeout(r,ms));
+    async function glowPinSuccess(duration = 500) {
+      for (let i = 1; i <= 4; i++) {
+        const d = document.getElementById('d' + i);
+        if (!d) continue;
+        d.classList.add('filled', 'flash-success');
+      }
+      await sleep(duration);
+      for (let i = 1; i <= 4; i++) {
+        const d = document.getElementById('d' + i);
+        if (!d) continue;
+        d.classList.remove('flash-success');
       }
     }
-    function filterTextMatch(hay, needle){
-      const n = (needle||'').trim().toLowerCase();
-      if(!n) return true;
-      return (hay||'').toString().toLowerCase().includes(n);
-    }
-    function download(filename, text){
-      const a=document.createElement('a'); a.href='data:text/plain;charset=utf-8,'+encodeURIComponent(text); a.download=filename; a.click();
-    }
-
-    function hideTeamsUI(){
-      document.querySelector('.nav button[data-tab="tab-teams"]')?.classList.add('hidden');
-      document.getElementById('tab-teams')?.classList.add('hidden');
-    }
-
-    function isPinSet(v){
-      // Treat PIN as set when the plain pin column has a non-empty value
-      // and is not the placeholder string 'EMPTY'.
-      return typeof v === 'string' && v.trim() !== '' && v.trim().toUpperCase() !== 'EMPTY';
-    }
-
-    function openCfgModal(){ const m=$('cfgModal'); if(m) m.classList.remove('hidden'); }
-    function closeCfgModal(){ const m=$('cfgModal'); if(m) m.classList.add('hidden'); }
-
-    // Room items modal helpers
-    function openRoomItemsModal(title, items){
-      const m = $('roomItemsModal');
-      const titleEl = $('roomItemsTitle');
-      const list = $('roomItemsList');
-      if(titleEl) titleEl.textContent = title || 'Items';
-      if(list){
-        if(!items || items.length===0){
-          list.innerHTML = '<div class="empty">No items in this room</div>';
-        }else{
-          list.innerHTML = items.map(n => `<div class="mini"><div class="left"><div class="title">${n}</div></div></div>`).join('');
-        }
+    async function glowPinError(duration = 500) {
+      for (let i = 1; i <= 4; i++) {
+        const d = document.getElementById('d' + i);
+        if (!d) continue;
+        d.classList.add('filled', 'flash-error');
       }
-      if(m) m.classList.remove('hidden');
-    }
-    function closeRoomItemsModal(){ const m=$('roomItemsModal'); if(m) m.classList.add('hidden'); }
-
-    // ====== INIT & AUTH ======
-    async function init(){
-      const { data:{ session } } = await sb.auth.getSession();
-      if(!session){
-        document.querySelector('.app')?.classList.add('hidden');
-        document.getElementById('loginPage')?.classList.remove('hidden');
-        populateSiteSelect();
-        return;
+      await sleep(duration);
+      for (let i = 1; i <= 4; i++) {
+        const d = document.getElementById('d' + i);
+        if (!d) continue;
+        d.classList.remove('flash-error');
       }
-      S.user = session.user;
-      $('who').textContent = S.user.email || 'Signed in';
-      // Get profile -> site, auto-create if missing using user_metadata
-      const { data: prof, error } = await sb
-        .from('profiles')
-        .select('site_id, full_name, role')
-        .eq('user_id', S.user.id)
-        .limit(1);
-      if(error){ toast(error.message); return; }
+    }
+    function pinDots(n) { for (let i=1;i<=4;i++) { const d=$('d'+i); if(!d) continue; d.classList.toggle('filled', i<=n); } }
 
-      let profileRow = (prof && prof[0]) || null;
-      if(!profileRow){
-        // First login after email confirmation on a different device:
-        // use metadata captured at sign-up to create the profile now.
-        const meta = (S.user && S.user.user_metadata) || {};
-        const metaSite = Number(meta.site_id)||null;
-        const metaName = meta.full_name || null;
-        if(metaSite){
-          const { error: insErr } = await sb.from('profiles').insert({
-            user_id: S.user.id,
-            site_id: metaSite,
-            full_name: metaName,
-            role: 'admin'
-          });
-          if(!insErr){
-            const { data: prof2 } = await sb
-              .from('profiles')
-              .select('site_id, full_name, role')
-              .eq('user_id', S.user.id)
-              .limit(1);
-            profileRow = (prof2 && prof2[0]) || null;
-          }
-        }
+    // Simple keypad click using WebAudio (works on iOS after first tap)
+    let AC = null;
+    function playClick(freq = 420, dur = 0.07) {
+      try {
+        AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+        const o = AC.createOscillator();
+        const g = AC.createGain();
+        o.type = 'sine';
+        o.frequency.value = freq;
+        o.connect(g);
+        g.connect(AC.destination);
+        const now = AC.currentTime;
+        g.gain.setValueAtTime(0, now);
+        g.gain.linearRampToValueAtTime(0.14, now + 0.005);
+        g.gain.exponentialRampToValueAtTime(0.00001, now + dur);
+        o.start();
+        o.stop(now + dur + 0.02);
+      } catch(e) { /* no-op */ }
+    }
+
+    // QR code rendering helpers
+    function renderQR(elId, text) {
+      const el = $(elId); if (!el) return;
+      el.innerHTML = '';
+      if (typeof QRCode !== 'undefined') {
+        new QRCode(el, { text, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+      } else {
+        el.textContent = text;
       }
-      if(!profileRow){ $('site').textContent='No profile/site'; toast('No profile found — ask admin to assign your site.'); return; }
-      S.profile = profileRow; S.siteId = S.profile.site_id;
-      $('site').textContent = `Site ${S.siteId}`;
-      document.getElementById('loginPage')?.classList.add('hidden');
-      document.querySelector('.app')?.classList.remove('hidden');
-      $('panel-app')?.classList.remove('hidden');
-      await refreshAll();
     }
-
-    async function refreshAll(){
-      await Promise.all([
-        loadRooms(), loadTypes(), loadItems(), loadStaff(), loadAudits(),
-        loadCheckStatus(), loadCheckSummary(),
-        loadTeams(), loadTeamMembers(), loadCheckTypeTeams()
-      ]);
-      buildTypesByCat();
-      buildTypeTeamMap();
-      fillItemPickers();
-      renderRooms(); renderTypes(); renderItems(); renderStaff(); renderTeams(); renderAudits(); renderDashboard();
-      updateKPIs();
-    }
-    async function loadCheckStatus(){
-      const { data, error } = await sb.from('v_item_check_status')
-        .select('*').eq('site_id', S.siteId);
-      if(!error) S.dashStatus = data||[]; else toast(error.message);
-    }
-    async function loadCheckSummary(){
-      const { data, error } = await sb.from('v_item_check_summary')
-        .select('*').eq('site_id', S.siteId);
-      if(!error) S.dashSummary = data||[]; else toast(error.message);
-    }
-    function relTime(toIso){
-      const t = new Date(toIso).getTime();
-      const now = Date.now();
-      const diff = Math.round((t - now)/1000); // seconds
-      const abs = Math.abs(diff);
-      const d = Math.floor(abs/86400), h = Math.floor((abs%86400)/3600), m = Math.floor((abs%3600)/60);
-      const base = d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`;
-      return diff >= 0 ? `in ${base}` : `${base} ago`;
-    }
-    function setRing(percent){
-      const p = Math.max(0, Math.min(100, Math.round(percent)));
-      const ring = document.getElementById('ringProgress');
-      const inner = document.getElementById('ringInner');
-      if(ring) ring.style.setProperty('--p', p);
-      if(inner) inner.textContent = p + '%';
-    }
-
-    function animateNumber(el, to){
-      if(!el) return;
-      const from = parseInt(el.getAttribute('data-prev')||el.textContent||'0',10) || 0;
-      const start = performance.now(), dur = 450;
-      function step(ts){
-        const t = Math.min(1,(ts-start)/dur);
-        const val = Math.round(from + (to-from)*t);
-        el.textContent = val;
-        if(t < 1) requestAnimationFrame(step); else el.setAttribute('data-prev', String(to));
-      }
-      requestAnimationFrame(step);
-    }
-    function setRingAnimated(percent){
-      const ring = document.getElementById('ringProgress');
-      const inner = document.getElementById('ringInner');
-      const from = parseInt(inner?.getAttribute('data-prev')||'0',10) || 0;
-      const to = Math.max(0, Math.min(100, Math.round(percent)));
-      const start = performance.now(), dur = 650;
-      function step(ts){
-        const t = Math.min(1,(ts-start)/dur);
-        const p = Math.round(from + (to-from)*t);
-        if(ring) ring.style.setProperty('--p', p);
-        if(inner) inner.textContent = p + '%';
-        if(t < 1) requestAnimationFrame(step); else inner?.setAttribute('data-prev', String(to));
-      }
-      requestAnimationFrame(step);
-    }
-    function renderDashboard(){
-      // summary badges
-      const byStatus = Object.fromEntries(S.dashSummary.map(r => [r.status, r.count]));
-      const ok = byStatus.ok||0, soon = byStatus.due_soon||0, late = byStatus.overdue||0, uns = byStatus.unscheduled||0;
-      // progress ring considers only scheduled items
-      const scheduled = ok + soon + late;
-      const pct = scheduled ? Math.round((ok / scheduled) * 100) : 0;
-      setRingAnimated(pct);
-      const progText = document.getElementById('dashProgressText');
-      if(progText) progText.textContent = `${ok}/${scheduled} within window`;
-
-      const badgeWrap = document.getElementById('dashBadges');
-      if(badgeWrap){
-        badgeWrap.innerHTML = `
-          <span class="badge"><span class="dot ok"></span> OK ${ok}</span>
-          <span class="badge"><span class="dot soon"></span> Due soon ${soon}</span>
-          <span class="badge"><span class="dot late"></span> Overdue ${late}</span>
-          <span class="badge"><span class="dot"></span> Unscheduled ${uns}</span>`;
-      }
-      animateNumber($('statOk'), ok);
-      animateNumber($('statSoon'), soon);
-      animateNumber($('statLate'), late);
-      animateNumber($('statUnsch'), uns);
-
-      // partition lists
-      const todayStart = new Date(); todayStart.setHours(0,0,0,0);
-      const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
-
-      const overdue = S.dashStatus.filter(x => x.status === 'overdue')
-        .sort((a,b)=> new Date(a.next_due_at) - new Date(b.next_due_at));
-      const dueSoon = S.dashStatus.filter(x => x.status === 'due_soon' && new Date(x.next_due_at) > todayEnd)
-        .sort((a,b)=> new Date(a.next_due_at) - new Date(b.next_due_at))
-        .filter(x => (new Date(x.next_due_at) - todayEnd) <= 7*86400000); // next 7 days
-      const dueToday = S.dashStatus.filter(x => {
-        const d = new Date(x.next_due_at);
-        return d >= todayStart && d <= todayEnd && (x.status === 'due_soon' || x.status === 'overdue');
-      }).sort((a,b)=> new Date(a.next_due_at) - new Date(b.next_due_at));
-
-      function rowHTML(x, cls){
-        const due = new Date(x.next_due_at);
-        const ownerTeam = S.typeTeamByName[x.check_type]?.name || '';
-        const title = `${x.item_name} • ${x.check_type}`;
-        const sub = `${x.room_name||''} • due ${due.toLocaleString()} • ${relTime(x.next_due_at)}`;
-        return `<div class="mini ${cls}">
-          <div class="left">
-            <div class="title">${title}</div>
-            <div class="sub">${sub}</div>
-          </div>
-          <div class="right">
-            ${ownerTeam ? `<span class="tag" title="owner team">${ownerTeam}</span>` : ''}
-            <div class="ring small" style="--p:0"><div class="inner" title="frequency">${x.frequency}</div></div>
-            <button class="btn small" data-act="manageItem" data-code="${x.item_code}">Manage</button>
+    function showUploadQR() { renderQR('qrUpload', '^&032&^'); }
+    function showResetQR() { renderQR('qrReset', '^&030&^'); }
+    function showUploadCounter(){
+      const el = $('qrUpload'); if(!el) return;
+      el.innerHTML = `
+        <div class="upload-counter" aria-hidden="true">
+          <div class="upload-title">
+            <div class="num mono" id="uploadCount">0</div>
+            <div class="sub">captured</div>
           </div>
         </div>`;
+    }
+    function updateUploadCounter(){
+      const n = $('uploadCount'); if(n) n.textContent = String(S.scans.length);
+    }
+    let uploadQuietTimer = null;
+    let resetInterval = null;
+    let doubleDeepTimer = null;
+    let uploadFocusTimer = null;
+    let scanTrollyTimer = null;
+    function startUploadFocusLoop(){
+      if (uploadFocusTimer) clearInterval(uploadFocusTimer);
+      // initial focus
+      focusUploadInput();
+      // aggressively keep focus while on the upload screen
+      uploadFocusTimer = setInterval(()=>{
+        if (currentScreen !== 'screen-upload') { clearInterval(uploadFocusTimer); uploadFocusTimer = null; return; }
+        const el = $('uploadInput');
+        if (el && document.activeElement !== el) { el.focus(); }
+      }, 250);
+      // if the input ever blurs while we're on this screen, refocus immediately
+      const el = $('uploadInput');
+      if (el) {
+        el.onblur = () => { if (currentScreen === 'screen-upload') setTimeout(focusUploadInput, 0); };
       }
-
-      const od = $('dashOverdueBody'); if(od) od.innerHTML = overdue.map(x => rowHTML(x, 'glow-red')).join('') || '<div class="empty">Nothing overdue 🎉</div>';
-      const ds = $('dashSoonBody'); if(ds) ds.innerHTML = dueSoon.map(x => rowHTML(x, 'glow-amber')).join('') || '<div class="empty">Nothing due soon</div>';
-      const td = $('dashTodayBody'); if(td) td.innerHTML = dueToday.map(x => rowHTML(x, 'pulse')).join('') || '<div class="empty">Nothing due today</div>';
     }
-
-    // ====== LOADERS ======
-    async function loadRooms(){
-      const { data, error } = await sb.from('rooms').select('id,name,occupied_by').eq('site_id', S.siteId).order('name');
-      if(!error) S.rooms = data||[]; else toast(error.message);
+    function stopUploadFocusLoop(){
+      if (uploadFocusTimer) { clearInterval(uploadFocusTimer); uploadFocusTimer = null; }
     }
-    async function loadTypes(){
-      const { data, error } = await sb.from('check_types').select('id,name,category,active').eq('site_id', S.siteId).order('name');
-      if(!error) S.types = data||[]; else toast(error.message);
-    }
-    async function loadItems(){
-      const { data, error } = await sb.from('v_items_admin')
-        .select('id,site_id,item_id,item_name,category,active,room_id,room_name,default_check_type_id,default_check_type_name,comments')
-        .eq('site_id', S.siteId).order('item_name');
-      if(!error) S.items = data||[]; else toast(error.message);
-    }
-    async function loadStaff(){
-      const { data, error } = await sb.from('kiosk_users').select('id,full_name,role,pin').eq('site_id', S.siteId).order('full_name');
-      if(!error) S.staff = data||[]; else toast(error.message);
-    }
-    async function loadAudits(){
-      const { data, error } = await sb.from('v_submission_detail')
-        .select('*').eq('site_id', S.siteId).order('submitted_at', { ascending:false }).limit(200);
-      if(!error) S.audits = data||[]; else toast(error.message);
-    }
-
-    async function loadTeams(){
-      const { data, error } = await sb.from('teams')
-        .select('id,name').eq('site_id', S.siteId).order('name');
-      if(error){
-        if((error.message||'').includes('Could not find the table')){
-          S.teams = [];
-          hideTeamsUI();
+    // Also refocus if the tab/app regains visibility while on the upload screen
+    document.addEventListener('visibilitychange', ()=>{
+      if (document.visibilityState === 'visible' && currentScreen === 'screen-upload') {
+        focusUploadInput();
+      }
+    });
+    // Aggressively re-assert focus on the hidden input when the page/tab regains focus, after navigations, and on any pointer/focus events while on the upload screen
+    window.addEventListener('pageshow', ()=>{
+      if (currentScreen === 'screen-upload') focusUploadInput();
+    });
+    window.addEventListener('focus', ()=>{
+      if (currentScreen === 'screen-upload') focusUploadInput();
+    });
+    // Capture any taps/clicks and re-assert focus on the hidden input
+    document.addEventListener('pointerdown', ()=>{
+      if (currentScreen === 'screen-upload') focusUploadInput();
+    }, true);
+    // If focus drifts to any other element while on the upload screen, pull it back
+    document.addEventListener('focusin', (e)=>{
+      if (currentScreen === 'screen-upload') {
+        const el = $('uploadInput');
+        if (el && e.target !== el) { el.focus(); }
+      }
+    }, true);
+    function startResetCountdown(seconds = 30) {
+      if (resetInterval) { clearInterval(resetInterval); resetInterval = null; }
+      const el = $('resetCountdown');
+      let t = seconds;
+      const tick = () => {
+        if (el) el.textContent = `Auto return in ${t}s`;
+        if (t <= 0) {
+          clearInterval(resetInterval);
+          resetInterval = null;
+          show('screen-pin');
           return;
         }
-        toast(error.message); return;
-      }
-      S.teams = data||[];
+        t -= 1;
+      };
+      tick();
+      resetInterval = setInterval(tick, 1000);
     }
-    async function loadTeamMembers(){
-      const { data, error } = await sb.from('team_members')
-        .select('team_id,user_id').eq('site_id', S.siteId);
-      if(error){
-        if((error.message||'').includes('Could not find the table')){ S.teamMembers = []; return; }
-        toast(error.message); return;
-      }
-      S.teamMembers = data||[];
-    }
-    async function loadCheckTypeTeams(){
-      const { data, error } = await sb.from('check_type_teams')
-        .select('check_type_id,team_id').eq('site_id', S.siteId);
-      if(error){
-        if((error.message||'').includes('Could not find the table')){
-          S.checkTypeTeams = [];
-          buildTypeTeamMap();
-          return;
-        }
-        toast(error.message); return;
-      }
-      S.checkTypeTeams = data||[];
-      buildTypeTeamMap();
+    function focusUploadInput(){ const u=$('uploadInput'); if(!u) return; u.value=''; u.focus(); }
+    function scheduleUploadAutoContinue(){ if(uploadQuietTimer) clearTimeout(uploadQuietTimer); uploadQuietTimer = setTimeout(async ()=>{ await refreshReview(); show('screen-review'); }, 2000); }
+    function startDoubleDeepCycle(){
+  const img = $('imgDoubleDeep');
+  if (!img) return;
+  stopDoubleDeepCycle(); // ensure only one timer
+  let alt = false;
+  doubleDeepTimer = setInterval(()=>{
+    alt = !alt;
+    img.src = alt ? 'DoubleDeep2.png' : 'DoubleDeep.png';
+  }, 1000);
+}
+function stopDoubleDeepCycle(){
+  if (doubleDeepTimer) { clearInterval(doubleDeepTimer); doubleDeepTimer = null; }
+  const img = $('imgDoubleDeep');
+  if (img) img.src = 'DoubleDeep.png';
+}
+function startScanTrollyCycle(){
+  const img = $('imgScanTrolly');
+  if (!img) return;
+  stopScanTrollyCycle(); // ensure only one timer
+  let alt = false;
+  scanTrollyTimer = setInterval(()=>{
+    alt = !alt;
+    img.src = alt ? 'ScanTrolly2.png' : 'ScanTrolly.png';
+  }, 1000);
+}
+
+function stopScanTrollyCycle(){
+  if (scanTrollyTimer) { clearInterval(scanTrollyTimer); scanTrollyTimer = null; }
+  const img = $('imgScanTrolly');
+  if (img) img.src = 'ScanTrolly.png';
+}
+    // Helper to reset upload screen UI state
+    function resetUploadUI(){
+      if(uploadQuietTimer) { clearTimeout(uploadQuietTimer); uploadQuietTimer=null; }
+      const wrap=$('qrUploadWrap'); if(wrap) wrap.classList.remove('hidden');
+      const st=$('uploadStatus'); if(st) st.classList.add('hidden');
+      const cnt=$('capCount'); if(cnt) cnt.textContent='0';
+      const inp=$('uploadInput'); if(inp){ inp.value=''; }
     }
 
-    function buildTypeTeamMap(){
-      S.typeTeamById = {}; S.typeTeamByName = {};
-      const teamById = Object.fromEntries((S.teams||[]).map(t=>[t.id, t]));
-      for(const m of (S.checkTypeTeams||[])){
-        const team = teamById[m.team_id];
-        if(team) S.typeTeamById[m.check_type_id] = team;
-      }
-      for(const t of (S.types||[])){
-        const team = S.typeTeamById[t.id];
-        if(team) S.typeTeamByName[t.name] = team;
-      }
-    }
+    // Ensure session -> get site -> show PIN
 
-    // ====== RENDERERS ======
-    function renderRooms(){
-      const tb=$('roomsBody'); tb.innerHTML='';
-      const staffById = Object.fromEntries((S.staff||[]).map(s=>[s.id, s.full_name]));
-      const staffOptions = ['<option value="">(none)</option>']
-        .concat((S.staff||[]).map(s=>`<option value="${s.id}">${s.full_name}</option>`))
-        .join('');
+    // Lookup helper: fetch items by scanned IDs using Supabase client only (no REST fallback)
+    async function fetchItemsByIds(siteId, codes){
+      // Normalise to unique trimmed strings
+      const ids = Array.from(new Set((codes||[]).map(c => String(c).trim())));
+      if (!ids.length) return [];
 
-      for(const r of S.rooms){
-        const ownerName = r.occupied_by ? (staffById[r.occupied_by] || '') : '';
-        const tr=document.createElement('tr');
-        tr.innerHTML = `
-          <td>${r.name}</td>
-          <td data-cell="owner">
-            <span class="owner-text">${ownerName || ''}</span>
-            <select class="owner-select hidden">${staffOptions}</select>
-          </td>
-          <td class="tools">
-            <button class="btn small" data-act="viewItems" data-id="${r.id}" data-room-name="${r.name}">View items</button>
-            <button class="btn small" data-act="editOwner" data-id="${r.id}" data-mode="edit">Edit owner</button>
-            <button class="btn small hidden" data-act="cancelOwner" data-id="${r.id}">Cancel</button>
-            <button class="btn small" data-act="rename" data-id="${r.id}">Rename</button>
-            <button class="btn small danger" data-act="del" data-id="${r.id}">Delete</button>
-          </td>`;
-        const sel = tr.querySelector('select.owner-select');
-        if(sel) sel.value = r.occupied_by || '';
-        tb.appendChild(tr);
-      }
-    }
-
-    function renderTypes(){
-      const tb=$('typesBody'); tb.innerHTML='';
-      const teamOpts = ['<option value="">(none)</option>']
-        .concat((S.teams||[]).map(t=>`<option value="${t.id}">${t.name}</option>`))
-        .join('');
-      for(const t of S.types){
-        const selectedTeam = S.typeTeamById[t.id]?.id || '';
-        const tr=document.createElement('tr');
-        tr.innerHTML = `
-          <td>${t.name}</td>
-          <td>
-            <select class="type-team-select" data-act="typeTeam" data-id="${t.id}">
-              ${teamOpts}
-            </select>
-          </td>
-          <td>${t.active===false?'<span class="danger-text">no</span>':'yes'}</td>
-          <td class="tools">
-            <button class="btn small" data-act="toggleType" data-id="${t.id}">${t.active===false?'Activate':'Deactivate'}</button>
-            <button class="btn small" data-act="renameType" data-id="${t.id}">Rename</button>
-            <button class="btn small danger" data-act="delType" data-id="${t.id}">Delete</button>
-          </td>`;
-        tb.appendChild(tr);
-        const sel = tr.querySelector('select.type-team-select');
-        if(sel) sel.value = selectedTeam;
-      }
-    }
-
-    function renderTeams(){
-      const tb=$('teamsBody'); if(!tb) return; tb.innerHTML='';
-      const staffById = Object.fromEntries((S.staff||[]).map(s=>[s.id, s.full_name]));
-      for(const team of (S.teams||[])){
-        const members = (S.teamMembers||[]).filter(m=>m.team_id===team.id).map(m=>({ id:m.user_id, name:staffById[m.user_id]||'?' }));
-        const memberChips = members.length
-          ? members.map(m=>`<span class="chip" data-act="removeMember" data-team="${team.id}" data-user="${m.id}">${m.name} ✕</span>`).join(' ')
-          : '<span class="muted">(no members)</span>';
-        const nonMembers = (S.staff||[]).filter(s=>!members.some(m=>m.id===s.id));
-        const addOpts = ['<option value="">Select staff…</option>']
-          .concat(nonMembers.map(s=>`<option value="${s.id}">${s.full_name}</option>`)).join('');
-        const tr=document.createElement('tr');
-        tr.innerHTML = `
-          <td>${team.name}</td>
-          <td>${memberChips}</td>
-          <td class="row" style="gap:8px">
-            <select class="team-add-member" data-team="${team.id}">${addOpts}</select>
-            <button class="btn small" data-act="addMember" data-team="${team.id}">Add</button>
-          </td>
-          <td class="tools">
-            <button class="btn small" data-act="renameTeam" data-id="${team.id}">Rename</button>
-            <button class="btn small danger" data-act="delTeam" data-id="${team.id}">Delete</button>
-          </td>`;
-        tb.appendChild(tr);
-      }
-    }
-
-    function renderItems(){
-      const q = $('itemSearch')?.value || $('globalSearch')?.value || '';
-      const tb=$('itemsBody'); if(!tb) return; tb.innerHTML='';
-      const rows = S.items.filter(r =>
-        filterTextMatch(r.item_id, q) || filterTextMatch(r.item_name, q) || filterTextMatch(r.room_name, q)
-      );
-      for(const r of rows){
-        const tr=document.createElement('tr');
-        tr.innerHTML = `
-          <td class="mono">${r.item_id}</td>
-          <td>${r.item_name}</td>
-          <td>${r.room_name||'<span class="muted">(none)</span>'}</td>
-          <td class="tools">
-            <button class="btn small" data-act="cfg" data-code="${r.item_id}">Configure</button>
-          </td>`;
-        tb.appendChild(tr);
-      }
-    }
-    // Loader for single item's plan
-    async function loadItemPlan(itemCode){
-      // resolve item pk
-      const it = S.items.find(x=>x.item_id===itemCode);
-      if(!it){ S.selectedItemPlan=[]; return; }
-      const { data, error } = await sb
-        .from('item_allowed_types')
-        .select('id, site_id, item_id, check_type_id, frequency, warn_before, required, active, check_types!inner(name)')
-        .eq('site_id', S.siteId)
-        .eq('item_id', it.id);
-      if(error){ toast(error.message); S.selectedItemPlan=[]; return; }
-      // map shape
-      S.selectedItemPlan = (data||[]).map(d=>({
-        id: d.id, check_type_id: d.check_type_id, check_type_name: d.check_types.name,
-        frequency: d.frequency, warn_before: d.warn_before, required: d.required, active: d.active
-      }));
-    }
-    // Configurator helpers/renderers
-    function fillOwnerRoles(){
-      // Now shows TEAMS instead of roles
-      const sel=$('cfgOwnerRole'); if(!sel) return; sel.innerHTML='';
-      const mk=(v,l)=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; sel.appendChild(o); };
-      mk('','(none)');
-      const sortedTeams = [...(S.teams||[])].sort((a,b)=>a.name.localeCompare(b.name));
-      sortedTeams.forEach(t=>mk(t.name, t.name));
-    }
-    function fillCfgRooms(){
-      const sel=$('cfgRoom'); if(!sel) return; sel.innerHTML='';
-      const mk=(v,l)=>{ const o=document.createElement('option'); o.value=l; o.textContent=l; sel.appendChild(o); };
-      const sorted=[...S.rooms].sort((a,b)=>a.name.localeCompare(b.name));
-      if(sorted.length===0) mk('', '(no rooms yet)'); else sorted.forEach(r=>mk(r.id,r.name));
-    }
-    function fillPlanTypePicker(item){
-      const tSel=$('planTypeNew'); if(!tSel) return; tSel.innerHTML='';
-      const types = S.typesByCat[item?.category||'general'] || S.typesByCat.general || [];
-      const mk=(v)=>{ const o=document.createElement('option'); o.value=v.name; o.textContent=v.name; tSel.appendChild(o); };
-      if(types.length===0){ const o=document.createElement('option'); o.value=''; o.textContent='(no types for category)'; tSel.appendChild(o); }
-      else types.forEach(mk);
-    }
-    function renderPlan(){
-      const tb=$('planBody'); if(!tb) return; tb.innerHTML='';
-      if(!S.selectedItem){ tb.innerHTML='<tr><td colspan="7" class="muted">Select an item.</td></tr>'; return; }
-      for(const row of S.selectedItemPlan){
-        const ownerTeam = (S.typeTeamByName[row.check_type_name]?.name) || '';
-        const tr=document.createElement('tr');
-        tr.innerHTML = `
-          <td>${row.check_type_name}</td>
-          <td>${ownerTeam ? `<span class="tag">${ownerTeam}</span>` : '<span class="muted">(none)</span>'}</td>
-          <td><input class="mono" type="text" data-field="frequency" data-id="${row.id}" value="${row.frequency||''}" placeholder="e.g., 1 week"></td>
-          <td><input class="mono" type="text" data-field="warn_before" data-id="${row.id}" value="${row.warn_before||'3 days'}" placeholder="e.g., 2 days"></td>
-          <td><input type="checkbox" data-field="required" data-id="${row.id}" ${row.required?'checked':''}></td>
-          <td><input type="checkbox" data-field="active" data-id="${row.id}" ${row.active?'checked':''}></td>
-          <td class="tools">
-            <button class="btn small" data-act="savePlan" data-id="${row.id}">Save</button>
-            <button class="btn small danger" data-act="delPlan" data-id="${row.id}">Remove</button>
-          </td>`;
-        tb.appendChild(tr);
-      }
-    }
-    async function savePlanRow(id){
-      const row = S.selectedItemPlan.find(x=>x.id===Number(id));
-      if(!row) return;
-      const freq = document.querySelector(`input[data-field="frequency"][data-id="${id}"]`)?.value || '0 days';
-      const warn = document.querySelector(`input[data-field="warn_before"][data-id="${id}"]`)?.value || '3 days';
-      const required = document.querySelector(`input[data-field="required"][data-id="${id}"]`)?.checked || false;
-      const active = document.querySelector(`input[data-field="active"][data-id="${id}"]`)?.checked || false;
-      // Use RPC to upsert by name
-      await sb.rpc('admin_set_item_check', {
-        p_site_id: S.siteId,
-        p_item_code: S.selectedItem.item_id,
-        p_check_type_name: row.check_type_name,
-        p_frequency: freq,
-        p_warn_before: warn,
-        p_required: required,
-        p_active: active
-      }).then(async ({ error })=>{
-        if(error) return toast(error.message);
-        await loadItemPlan(S.selectedItem.item_id); renderPlan(); toast('Plan saved');
-      });
-    }
-
-    function renderStaff(){
-      const tb=$('staffBody'); tb.innerHTML='';
-      const teamById = Object.fromEntries((S.teams||[]).map(t=>[t.id, t.name]));
-      const teamsForUser = (uid)=> (S.teamMembers||[]).filter(m=>m.user_id===uid).map(m=>teamById[m.team_id]).filter(Boolean);
-      for(const s of S.staff){
-        const tnames = teamsForUser(s.id);
-        const teamHtml = tnames.length ? tnames.map(n=>`<span class=\"tag\">${n}</span>`).join(' ') : '<span class=\"muted\">(none)</span>';
-        const tr=document.createElement('tr');
-        tr.innerHTML = `
-          <td>${s.full_name}</td>
-          <td>${s.role}</td>
-          <td>${teamHtml}</td>
-          <td>${isPinSet(s.pin) ? 'set' : '<span class=\"muted\">not set</span>'}</td>
-          <td class=\"tools\">
-            <button class=\"btn small\" data-act=\"setPin\" data-id=\"${s.id}\">Set PIN</button>
-            <button class=\"btn small\" data-act=\"renameStaff\" data-id=\"${s.id}\">Rename</button>
-            <button class=\"btn small\" data-act=\"roleStaff\" data-id=\"${s.id}\">Change role</button>
-            <button class=\"btn small danger\" data-act=\"delStaff\" data-id=\"${s.id}\">Delete</button>
-          </td>`;
-        tb.appendChild(tr);
-      }
-    }
-
-    function renderAudits(){
-      const q=$('auditSearch').value||'';
-      const tb=$('auditsBody'); tb.innerHTML='';
-      const rows = S.audits.filter(r =>
-        filterTextMatch(r.staff_name,q) || filterTextMatch(r.item_name,q) || filterTextMatch(r.scanned_code,q) || filterTextMatch(r.check_type,q)
-      );
-      for(const a of rows){
-        const tr=document.createElement('tr');
-        tr.innerHTML = `
-          <td>${fmtDate(a.submitted_at)}</td>
-          <td>${a.staff_name}</td>
-          <td class="mono">${a.scanned_code}</td>
-          <td>${a.item_name||''}</td>
-          <td>${a.room||''}</td>
-          <td>${a.check_type||''}</td>
-          <td>${a.check_value||''}</td>`;
-        tb.appendChild(tr);
-      }
-    }
-
-    // ====== ACTIONS ======
-    // Login + Sign-up (standalone page)
-    let lpAuthMode = 'login';
-    let lpSignupStep = 1; // 1: email/pass/site, 2: full name
-
-    async function populateSiteSelect(){
-      const sel = $('lpSiteSelect'); if(!sel) return;
-      // Always refresh the list
-      sel.innerHTML = '<option value="">Loading sites…</option>';
-      sel.disabled = true;
-      const { data, error } = await sb.from('sites').select('id,name').order('name');
-      if(error){
-        sel.innerHTML = '<option value="">(failed to load sites)</option>';
-        sel.disabled = false;
-        return;
-      }
-      const rows = data || [];
-      if(rows.length === 0){
-        sel.innerHTML = '<option value="">(no sites available — ask admin)</option>';
-        sel.disabled = false;
-        return;
-      }
-      sel.innerHTML = '<option value="">Select site…</option>' + rows.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
-      sel.disabled = false;
-    }
-
-    function setSignupStep(step){
-      lpSignupStep = step;
-      const rowCreds = $('lpRowCreds');
-      const rowSite  = $('lpSignupExtra');
-      const rowName  = $('lpSignupNameRow');
-      const btn1     = $('lpSignIn');
-      const btn2     = $('lpSignIn2');
-      if(step === 1){
-        rowCreds?.classList.remove('hidden');
-        rowSite?.classList.remove('hidden');
-        rowName?.classList.add('hidden');
-        btn1?.classList.remove('hidden');
-        if(btn1) btn1.textContent = 'Create account';
-        btn2?.classList.add('hidden');
-        if($('lpTitle')) $('lpTitle').textContent = 'Create an account';
-        populateSiteSelect();
-      } else {
-        rowCreds?.classList.add('hidden');
-        rowSite?.classList.add('hidden');
-        rowName?.classList.remove('hidden');
-        btn1?.classList.add('hidden');
-        if(btn2){ btn2.classList.remove('hidden'); btn2.textContent = 'Enter site'; }
-        if($('lpTitle')) $('lpTitle').textContent = 'Create an account';
-      }
-      $('lpMsg').textContent = '';
-    }
-
-    function setLpAuthMode(mode){
-      lpAuthMode = mode;
-      const link  = document.getElementById('lpSignupLink');
-      const title = document.getElementById('lpTitle');
-      if(mode==='signup'){
-        if(link)  link.textContent  = 'Have an account? Sign in';
-        if(title) title.textContent = 'Create an account';
-        setSignupStep(1);
-      } else {
-        if(link)  link.textContent  = 'Create an account';
-        if(title) title.textContent = 'Sign in';
-        const btn = $('lpSignIn'); if(btn) btn.textContent = 'Sign in';
-        $('lpRowCreds')?.classList.remove('hidden');
-        $('lpSignupExtra')?.classList.add('hidden');
-        $('lpSignupNameRow')?.classList.add('hidden');
-        $('lpSignIn')?.classList.remove('hidden');
-        $('lpMsg').textContent = '';
-      }
-    }
-
-    async function doLogin(){
-      const email=$('lpEmail').value.trim(), password=$('lpPass').value;
-      if(!email || !password){ $('lpMsg').textContent = 'Enter email and password.'; return; }
-      $('lpMsg').textContent = 'Signing in…';
-      const { error } = await sb.auth.signInWithPassword({ email, password });
-      if(error){ $('lpMsg').textContent = error.message; return; }
-      $('lpMsg').textContent='';
-      await init();
-    }
-
-    async function doSignup(){
-      const email=$('lpEmail').value.trim(), password=$('lpPass').value;
-      const full_name=($('lpName').value||'').trim();
-      const site_id = Number(($('lpSiteSelect')?.value) || 1);
-      if(!email || !password){ $('lpMsg').textContent = 'Email and password required.'; return; }
-      $('lpMsg').textContent = 'Creating account…';
-      const { data, error } = await sb.auth.signUp({
-        email, password,
-        options: { data: { site_id, full_name } }
-      });
-      if(error){ $('lpMsg').textContent = error.message; return; }
-      // Try to create profile (ignore errors if policies block it until confirmation)
+      // --- 1) JS client: straightforward .in() with strings ---
       try{
-        const userId = data?.user?.id;
-        if(userId){
-          await sb.from('profiles').insert({ user_id:userId, site_id, full_name, role:'admin' });
-        }
-      }catch(_){ /* ignore */ }
-      if(data?.session){
-        // Signed in immediately
-        $('lpMsg').textContent = 'Account created!';
-        await init();
-      }else{
-        // Email confirmation flow: stay here with a clear message, switch to login UI
-        setLpAuthMode('login');
-        $('lpMsg').textContent = `We sent a confirmation link to ${email}. Once confirmed, return here and sign in.`;
-        const btn = $('lpSignIn'); if(btn) btn.textContent = 'Sign in';
-        $('lpPass').value = '';
-      }
+        const { data, error } = await readClient()
+          .from('items')
+          .select('item_id, item_name, room, default_check_type, category')
+          .eq('site_id', siteId)
+          .in('item_id', ids);
+        if (!error && Array.isArray(data) && data.length) return data;
+      }catch(_){}
+
+      return [];
+    }
+    async function init() {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) { show('screen-login'); $('status').textContent = 'Not signed in'; return; }
+      S.user = session.user;
+      $('status').textContent = session.user.email;
+      // Fetch profile -> site id
+      const { data: prof, error } = await sb.from('profiles').select('site_id, full_name, role').eq('user_id', session.user.id).limit(1);
+      if (error || !prof || !prof.length) { show('screen-login'); $('loginMsg').textContent = 'No profile/site. Please onboard first.'; return; }
+      S.siteId = prof[0].site_id;
+      $('status').textContent = `${session.user.email} • Site ${S.siteId}`;
+      await preloadCache();
+      show('screen-pin');
     }
 
-    $('lpSignIn').addEventListener('click', async ()=>{
-      if(lpAuthMode==='signup'){
-        const email=$('lpEmail').value.trim();
-        const password=$('lpPass').value;
-        const siteId = $('lpSiteSelect')?.value || '';
-        if(!email || !password){ $('lpMsg').textContent='Enter email and password.'; return; }
-        if(!siteId){ $('lpMsg').textContent='Please select a site.'; return; }
-        setSignupStep(2);
-        $('lpMsg').textContent = 'Almost there — add your full name.';
-        $('lpName')?.focus();
-      } else {
-        await doLogin();
-      }
-    });
-    $('lpSignIn2').addEventListener('click', async ()=>{
-      if(lpAuthMode!=='signup' || lpSignupStep!==2) return;
-      await doSignup();
-    });
-    $('lpPass').addEventListener('keydown', (e)=>{
-      if(e.key==='Enter'){
-        if(lpAuthMode==='signup' && lpSignupStep===2) $('lpSignIn2').click(); else $('lpSignIn').click();
-      }
-    });
-    document.getElementById('lpSignupLink').addEventListener('click', (e)=>{
-      e.preventDefault(); setLpAuthMode(lpAuthMode==='login' ? 'signup' : 'login');
-    });
-    document.getElementById('lpForgotLink').addEventListener('click', (e)=>{ e.preventDefault(); alert('Password reset coming soon.'); });
-
-    $('btnLogout').addEventListener('click', async ()=>{
-      try{
-        const { error } = await sb.auth.signOut({ scope: 'global' });
-        if(error){
-          // Fallback to local-only sign out so the tab is cleared even if network fails
-          await sb.auth.signOut({ scope: 'local' });
-        }
-      }catch(_){
-        try{ await sb.auth.signOut({ scope: 'local' }); }catch(__){}
-      }finally{
-        // Reset UI and show the standalone login page
-        S.user = null; S.profile = null; S.siteId = null;
-        document.querySelector('.app')?.classList.add('hidden');
-        document.getElementById('loginPage')?.classList.remove('hidden');
-        document.getElementById('who').textContent = 'Not signed in';
-        document.getElementById('site').textContent = '—';
-      }
-    });
-
-    // Navigation
-    document.querySelectorAll('.nav button[data-tab]').forEach(b=>b.addEventListener('click', ()=> setActiveTab(b.dataset.tab)));
-    $('btnRefresh').addEventListener('click', refreshAll);
-    $('globalSearch').addEventListener('input', ()=>{ renderItems(); renderAudits(); });
-
-    // Dashboard (quick adds removed) — guard in case old elements exist in cached HTML
-    const _qaAddRoom = $('qaAddRoom');
-    if(_qaAddRoom){ _qaAddRoom.addEventListener('click', ()=>{/* removed */}); }
-    const _qaAddStaff = $('qaAddStaff');
-    if(_qaAddStaff){ _qaAddStaff.addEventListener('click', ()=>{/* removed */}); }
-    function openItemInForm(code){
-      const it=S.items.find(x=>x.item_id===code);
-      if(!it){ toast('Item not found'); return; }
-      setActiveTab('tab-items');
-      S.selectedItem = it;
-      openCfgModal();
-      $('cfgCodeInput').value = it.item_id;
-      $('cfgCodeInput').readOnly = true;
-      $('cfgName').textContent = it.item_name || '';
-      // Reset Change button and input affordances
-      const _btnEC = $('cfgEnableEditCode');
-      if(_btnEC){
-        _btnEC.textContent = 'Change';
-        _btnEC.classList.remove('save-glow');
-        _btnEC.dataset.mode = 'change';
-      }
-      $('cfgCodeInput').classList.remove('edit-pulse');
-      fillCfgRooms();
-      fillOwnerRoles();
-      fillPlanTypePicker(it);
-      if(it.room_name) $('cfgRoom').value = it.room_name;
-      $('cfgOwnerRole').value = '';
-      loadItemPlan(code).then(()=> renderPlan());
-      toast('Opened in configurator');
-    }
-    // Dashboard manage buttons
-    document.getElementById('tab-dashboard').addEventListener('click', (e)=>{
-      const b=e.target.closest('button[data-act="manageItem"]'); if(!b) return;
-      const code=b.dataset.code; openItemInForm(code);
-    });
-
-    // Rooms tab
-    $('addRoom').addEventListener('click', async ()=>{
-      const name=$('roomName').value.trim(); if(!name) return;
-      const { error } = await sb.from('rooms').insert({ site_id:S.siteId, name });
-      if(error) return toast(error.message);
-      $('roomName').value=''; await loadRooms(); renderRooms(); fillItemPickers(); updateKPIs(); toast('Room added');
-    });
-    $('roomsBody').addEventListener('click', async (e)=>{
-      const btn=e.target.closest('button'); if(!btn) return;
-      const id=Number(btn.dataset.id); const act=btn.dataset.act;
-      const tr = btn.closest('tr');
-
-      if(act==='viewItems'){
-        // find room & items in that room
-        const room = S.rooms.find(rr=>rr.id===id);
-        const roomName = room?.name || btn.getAttribute('data-room-name') || 'Room';
-        // Use either room_id or fallback to string match
-        const items = (S.items||[])
-          .filter(it => (it.room_id === id) || (it.room_name === roomName))
-          .map(it => it.item_name);
-        openRoomItemsModal(`Items in ${roomName}`, items);
-        return;
-      }
-
-      if(act==='editOwner'){
-        const sel = tr.querySelector('select.owner-select');
-        const text = tr.querySelector('.owner-text');
-        const cancelBtn = tr.querySelector('button[data-act="cancelOwner"]');
-
-        // Enter edit mode
-        if(btn.dataset.mode !== 'save'){
-          btn.dataset.mode = 'save';
-          btn.textContent = 'Save';
-          btn.classList.add('save-glow');
-          sel.classList.remove('hidden');
-          sel.classList.add('edit-pulse');
-          text.classList.add('hidden');
-          cancelBtn.classList.remove('hidden');
-          sel.focus();
-          return;
-        }
-
-        // Save mode
-        const newOwner = sel.value ? Number(sel.value) : null;
-        const { error } = await sb.from('rooms').update({ occupied_by: newOwner }).eq('id', id).eq('site_id', S.siteId);
-        if(error){ toast(error.message); return; }
-        await loadRooms();
-        renderRooms();
-        toast('Owner updated');
-        return;
-      }
-
-      if(act==='cancelOwner'){
-        const editBtn = tr.querySelector('button[data-act="editOwner"]');
-        const sel = tr.querySelector('select.owner-select');
-        const text = tr.querySelector('.owner-text');
-        editBtn.dataset.mode = 'edit';
-        editBtn.textContent = 'Edit owner';
-        editBtn.classList.remove('save-glow');
-        sel.classList.add('hidden');
-        sel.classList.remove('edit-pulse');
-        text.classList.remove('hidden');
-        btn.classList.add('hidden');
-        return;
-      }
-
-      if(act==='rename'){
-        const row=S.rooms.find(r=>r.id===id); const name=prompt('New room name', row?.name||''); if(!name) return;
-        const { error } = await sb.from('rooms').update({ name }).eq('id', id).eq('site_id', S.siteId);
-        if(error) return toast(error.message);
-        await loadRooms(); renderRooms(); fillItemPickers(); toast('Room renamed');
-        return;
-      }
-
-      if(act==='del'){
-        if(!confirm('Delete this room?')) return;
-        const { error } = await sb.from('rooms').delete().eq('id', id).eq('site_id', S.siteId);
-        if(error) return toast(error.message);
-        await loadRooms(); renderRooms(); fillItemPickers(); toast('Room deleted');
-        return;
-      }
-    });
-
-    // Types tab
-    $('addType').addEventListener('click', async ()=>{
-      const name = $('typeName').value.trim();
-      const catEl = $('typeCategory');
-      const category = catEl ? catEl.value : 'general';
-      if(!name) return;
-      const { error } = await sb.from('check_types').insert({ site_id:S.siteId, name, category, active:true });
-      if(error) return toast(error.message);
-      $('typeName').value=''; await loadTypes(); buildTypesByCat(); renderTypes(); fillItemPickers(); updateKPIs(); toast('Type added');
-    });
-    $('typesBody').addEventListener('click', async (e)=>{
-      const b=e.target.closest('button'); if(!b) return;
-      const id=Number(b.dataset.id), act=b.dataset.act;
-      if(act==='toggleType'){
-        const t=S.types.find(x=>x.id===id); const active = !(t?.active===false);
-        const { error } = await sb.from('check_types').update({ active: !active }).eq('id', id).eq('site_id', S.siteId);
-        if(error) return toast(error.message);
-        await loadTypes(); buildTypesByCat(); renderTypes(); fillItemPickers(); toast('Type toggled');
-      }
-      if(act==='renameType'){
-        const t=S.types.find(x=>x.id===id); const name=prompt('New type name', t?.name||''); if(!name) return;
-        const { error } = await sb.from('check_types').update({ name }).eq('id', id).eq('site_id', S.siteId);
-        if(error) return toast(error.message);
-        await loadTypes(); buildTypesByCat(); renderTypes(); fillItemPickers(); toast('Type renamed');
-      }
-      if(act==='delType'){
-        if(!confirm('Delete this check type?')) return;
-        const { error } = await sb.from('check_types').delete().eq('id', id).eq('site_id', S.siteId);
-        if(error) return toast(error.message);
-        await loadTypes(); buildTypesByCat(); renderTypes(); fillItemPickers(); toast('Type deleted');
-      }
-    });
-    async function setTypeTeam(checkTypeId, teamId){
-      // clear existing mapping then set if provided
-      const delRes = await sb.from('check_type_teams').delete()
-        .eq('site_id', S.siteId).eq('check_type_id', checkTypeId);
-      if(delRes.error){
-        if((delRes.error.message||'').includes('Could not find the table')){
-          toast('Team-owner feature is not enabled in your database (missing check_type_teams).');
-          return;
-        }
-        toast(delRes.error.message); return;
-      }
-      if(teamId){
-        const insRes = await sb.from('check_type_teams').insert({
-          site_id:S.siteId, check_type_id: checkTypeId, team_id: Number(teamId)
+    // Preload items and types for fast lookup
+    async function preloadCache() {
+      const i = await readClient().from('items').select('item_id, item_name, room, default_check_type, category').eq('site_id', S.siteId).order('item_name');
+      if (!i.error) { S.itemsById.clear(); (i.data||[]).forEach(r=>S.itemsById.set(r.item_id, r)); }
+      // Get check_types with category, and group by category
+      const t = await readClient().from('check_types').select('name, category').eq('site_id', S.siteId).order('name');
+      if (!t.error) {
+        S.typesByCategory = {};
+        (t.data || []).forEach(r => {
+          if (!S.typesByCategory[r.category]) S.typesByCategory[r.category] = [];
+          S.typesByCategory[r.category].push(r.name);
         });
-        if(insRes.error){
-          if((insRes.error.message||'').includes('Could not find the table')){
-            toast('Team-owner feature is not enabled in your database (missing check_type_teams).');
-            return;
+      }
+      guardSubmitForTypes();
+    }
+
+    // Login
+    $('doLogin').addEventListener('click', async ()=>{
+      $('loginMsg').textContent = 'Signing in…';
+      const email = $('loginEmail').value.trim();
+      const password = $('loginPass').value;
+      const { data, error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) { $('loginMsg').textContent = error.message; return; }
+      await init();
+    });
+
+    $('btnLogout').addEventListener('click', onTopbarButton);
+
+    // PIN keypad
+    let pin = '';
+    function onTopbarButton(){
+      const auditing = (currentScreen !== 'screen-login');
+      if (auditing) {
+        if (!confirm('Are you sure? All progress will be lost.')) return;
+        // Reset audit state
+        S.scans = [];
+        pin = '';
+        pinDots(0);
+        resetUploadUI();
+        const sl = $('scanList'); if (sl) sl.innerHTML = '';
+        const sc = $('scanCount'); if (sc) sc.textContent = '0';
+        if (resetInterval) { clearInterval(resetInterval); resetInterval = null; }
+        show('screen-pin');
+        return;
+      }
+      // Full sign-out when not in an audit
+      sb.auth.signOut().then(()=>{ $('footerWho').textContent = '—'; location.reload(); });
+    }
+    $('pad').addEventListener('click', async (e)=>{
+      const k = e.target.closest('.key'); if (!k) return;
+      const v = k.textContent.trim();
+      if (/^\d$/.test(v)) { playClick(); if (pin.length<4) pin+=v; pinDots(pin.length); }
+      if (pin.length === 4) { await tryPin(pin); }
+    });
+    $('btnClearPin').addEventListener('click', ()=>{ playClick(300, 0.08); pin=''; pinDots(0); });
+
+    async function tryPin(p) {
+      $('pinMsg').textContent = 'Checking…';
+      try {
+        const { data, error } = await sb
+          .from('kiosk_users')
+          .select('id, full_name, role')
+          .eq('site_id', S.siteId)
+          .eq('pin', p)
+          .limit(1);
+        if (error) { $('pinMsg').textContent = error.message; await glowPinError(500); pin=''; pinDots(0); return; }
+        if (!data || !data.length) { $('pinMsg').textContent = 'Invalid PIN'; await glowPinError(500); pin=''; pinDots(0); return; }
+
+        S.staff = { name: data[0].full_name, role: data[0].role || 'staff' };
+        $('footerWho').textContent = S.staff.name;
+        $('pinMsg').textContent = '';
+        // Flash bright green on all four dots for 0.5s before navigating
+        await glowPinSuccess(500);
+        pin = '';
+        pinDots(0);
+        show('screen-begin');
+      } catch (e) {
+        $('pinMsg').textContent = e.message || String(e);
+        await glowPinError(500);
+        pin=''; pinDots(0);
+      }
+    }
+
+    // Begin -> scanning, auto-advance to upload after 3 seconds
+    $('btnBegin').addEventListener('click', ()=>{
+      S.scans = [];
+      show('screen-scanning');
+      setTimeout(()=>{
+        resetUploadUI();
+        show('screen-upload');
+        showUploadQR();
+        focusUploadInput();
+      }, 3000);
+    });
+
+    function addScan(code) {
+      if (S.scans.includes(code)) return;
+      S.scans.push(code);
+      // No on-page list during audit; items are reviewed later.
+    }
+
+    // Finish -> upload
+    $('uploadInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); const raw=e.target.value.trim(); e.target.value=''; const m=raw.match(/^\d{10}$/); if(!m){ scheduleUploadAutoContinue(); return; } const code=m[0]; if(!S.scans.includes(code)){ const wasEmpty = S.scans.length === 0; S.scans.push(code); if (wasEmpty) { showUploadCounter(); } updateUploadCounter(); } scheduleUploadAutoContinue(); }});
+    $('btnResetDone').addEventListener('click', () => { if (resetInterval) { clearInterval(resetInterval); resetInterval = null; } show('screen-pin'); });
+
+
+
+
+    async function refreshReview() {
+      // Normalise scanned codes (strings, trimmed, unique)
+      const codes = Array.from(new Set((S.scans || []).map(c => String(c).trim())));
+
+      // Short-circuit if nothing scanned
+      const tb = $('reviewTable')?.querySelector('tbody');
+      if (!tb) return;
+      tb.innerHTML = '';
+      if (!codes.length) return;
+
+      // Use siteId; hard-fail if not initialised
+      const siteId = S.siteId;
+      if (siteId == null) { toast('No site configured. Please sign out and sign in again.'); return; }
+
+      // Fetch ONLY the scanned items for this site
+      const rows = await fetchItemsByIds(siteId, codes);
+      if (!rows || rows.length === 0) {
+        toast('No matching items found for this site. Check scanned codes or permissions.');
+      }
+
+      // Build a quick lookup map (string keys)
+      const byId = new Map();
+      for (const r of (rows||[])) byId.set(String(r.item_id).trim(), r);
+
+      guardSubmitForTypes();
+
+      // --- Group by Room, preserving scan order ---
+      const groups = new Map(); // room -> array of { code, it }
+      for (const code of codes) {
+        const it = byId.get(code);
+        const roomRaw = it ? (it.room || '') : '';
+        const room = roomRaw && roomRaw.trim() ? roomRaw.trim() : 'Unassigned room';
+        if (!groups.has(room)) groups.set(room, []);
+        groups.get(room).push({ code, it });
+      }
+
+      // Render groups
+      for (const [room, list] of groups) {
+        // Group header row (sticky within tbody)
+        const ghtr = document.createElement('tr');
+        ghtr.className = 'group-row';
+        const ghtd = document.createElement('td');
+        ghtd.colSpan = 4;
+        ghtd.innerHTML = `
+          <div class="group-head">
+            <div class="left">
+              <span class="room-dot" aria-hidden="true"></span>
+              <span class="room-name">${room}</span>
+            </div>
+            <span class="room-count">${list.length} item${list.length>1?'s':''}</span>
+          </div>`;
+        ghtr.appendChild(ghtd);
+        tb.appendChild(ghtr);
+
+        // Group items
+        for (const { code, it } of list) {
+          const tr = document.createElement('tr');
+          tr.className = 'group-item';
+
+          const tdName = document.createElement('td');
+          tdName.textContent = it ? it.item_name : '(Unknown)';
+
+          const tdRoom = document.createElement('td');
+          tdRoom.className = 'room-cell';
+          tdRoom.textContent = room; // keeps grouping obvious while dimmed
+
+          const tdType = document.createElement('td');
+          const sel = document.createElement('select');
+          sel.className = 'rowType';
+          sel.setAttribute('data-item-id', code);
+
+          // Determine types for this item's category
+          const category = it?.category || 'general';
+          const types = S.typesByCategory?.[category] || S.typesByCategory?.general || [];
+          for (const n of types) {
+            const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o);
           }
-          toast(insRes.error.message); return;
+          // Prefer per-item default if present and valid; otherwise fall back to first type
+          const def = it && it.default_check_type;
+          if (def && types.includes(def)) sel.value = def; else if (types.length) sel.value = types[0];
+          tdType.appendChild(sel);
+
+          // Remove column/button
+          const tdRemove = document.createElement('td');
+          const btnRemove = document.createElement('button');
+          btnRemove.className = 'btn danger icon';
+          btnRemove.type = 'button';
+          btnRemove.textContent = '×';
+          btnRemove.setAttribute('aria-label', 'Remove this item');
+          btnRemove.addEventListener('click', ()=>{
+            // Remove this scanned code from state
+            S.scans = S.scans.filter(c => c !== code);
+            // Remove the row from the table
+            tr.remove();
+            // If no items remain, disable submit and show a hint
+            const submitBtn = document.getElementById('btnSubmit');
+            const msg = document.getElementById('submitMsg');
+            if (submitBtn) submitBtn.disabled = (S.scans.length === 0);
+            if (S.scans.length === 0 && msg) msg.textContent = 'No items to submit.';
+          });
+          tdRemove.appendChild(btnRemove);
+
+          tr.appendChild(tdName); tr.appendChild(tdRoom); tr.appendChild(tdType); tr.appendChild(tdRemove);
+          tb.appendChild(tr);
         }
       }
-      await loadCheckTypeTeams(); buildTypeTeamMap(); renderTypes(); renderPlan(); renderDashboard();
-      toast('Team updated');
     }
-    $('typesBody').addEventListener('change', async (e)=>{
-      const sel = e.target.closest('select[data-act="typeTeam"]'); if(!sel) return;
-      const id = Number(sel.getAttribute('data-id'));
-      const teamId = sel.value || null;
-      await setTypeTeam(id, teamId);
-    });
 
-    // Teams
-    const _addTeam = $('addTeam'); if(_addTeam){ _addTeam.addEventListener('click', async ()=>{
-      const name = ($('teamName').value||'').trim(); if(!name) return;
-      const { error } = await sb.from('teams').insert({ site_id:S.siteId, name });
-      if(error) return toast(error.message);
-      $('teamName').value=''; await loadTeams(); renderTeams(); toast('Team added');
-    }); }
-    const _teamsBody = $('teamsBody'); if(_teamsBody){ _teamsBody.addEventListener('click', async (e)=>{
-      const b = e.target.closest('button,span.chip'); if(!b) return;
-      const act = b.getAttribute('data-act');
-      if(act==='renameTeam'){
-        const id = Number(b.getAttribute('data-id'));
-        const row = (S.teams||[]).find(t=>t.id===id);
-        const name = prompt('New team name', row?.name||''); if(!name) return;
-        const { error } = await sb.from('teams').update({ name }).eq('id', id).eq('site_id', S.siteId);
-        if(error) return toast(error.message);
-        await loadTeams(); renderTeams(); renderTypes(); buildTypeTeamMap(); toast('Renamed');
+    // Submit
+    $('btnSubmit').addEventListener('click', async()=>{
+      $('submitMsg').textContent='Submitting…';
+      if (!S.scans.length) { $('submitMsg').textContent='No scans.'; return; }
+      const selects = Array.from(document.querySelectorAll('.rowType'));
+      const staffName = S.staff?.name || 'Staff';
+
+      const sessionId = (crypto.randomUUID && crypto.randomUUID()) || String(Date.now());
+      const { data: sub, error: e1 } = await sb.from('submissions')
+        .insert({ site_id: S.siteId, session_id: sessionId, staff_name: staffName })
+        .select('id').single();
+      if (e1) { $('submitMsg').textContent = e1.message; return; }
+      const sid = sub.id;
+      const rows = [];
+      for (const s of selects) {
+        const itemId = s.getAttribute('data-item-id');
+        const type = (s.value || 'Working');
+        const value = 'Done';
+        rows.push({ site_id: S.siteId, submission_id: sid, item_id: itemId, check_type: type, check_value: value });
       }
-      if(act==='delTeam'){
-        const id = Number(b.getAttribute('data-id'));
-        if(!confirm('Delete this team?')) return;
-        // clean up mappings and members
-        await sb.from('team_members').delete().eq('team_id', id).eq('site_id', S.siteId);
-        await sb.from('check_type_teams').delete().eq('team_id', id).eq('site_id', S.siteId);
-        const { error } = await sb.from('teams').delete().eq('id', id).eq('site_id', S.siteId);
-        if(error) return toast(error.message);
-        await Promise.all([loadTeams(), loadTeamMembers(), loadCheckTypeTeams()]);
-        buildTypeTeamMap(); renderTeams(); renderTypes(); renderPlan(); renderDashboard(); toast('Team deleted');
-      }
-      if(act==='addMember'){
-        const teamId = Number(b.getAttribute('data-team'));
-        const sel = b.parentElement.querySelector('select.team-add-member');
-        const userId = Number(sel?.value||''); if(!userId) return;
-        const { error } = await sb.from('team_members').insert({ site_id:S.siteId, team_id:teamId, user_id:userId });
-        if(error) return toast(error.message);
-        await loadTeamMembers(); renderTeams(); renderStaff(); toast('Member added');
-      }
-      if(act==='removeMember'){
-        const teamId = Number(b.getAttribute('data-team'));
-        const userId = Number(b.getAttribute('data-user'));
-        const { error } = await sb.from('team_members').delete().eq('site_id', S.siteId).eq('team_id', teamId).eq('user_id', userId);
-        if(error) return toast(error.message);
-        await loadTeamMembers(); renderTeams(); renderStaff(); toast('Member removed');
-      }
-    }); }
-
-    // Items tab
-    const _itemCategoryEl = $('itemCategory'); if(_itemCategoryEl){ _itemCategoryEl.addEventListener('change', fillItemPickers); }
-    const _saveItemBtn = $('saveItem');
-    if(_saveItemBtn){
-      _saveItemBtn.addEventListener('click', async ()=>{
-        const p = {
-          p_site_id: S.siteId,
-          p_item_id: $('itemCode').value.trim(),
-          p_item_name: $('itemName').value.trim(),
-          p_room_name: $('itemRoom').value,
-          p_category: $('itemCategory').value,
-          p_default_check_type_name: $('itemType').value,
-          p_comments: $('itemComments').value.trim() || null
-        };
-        if(!p.p_item_id || !p.p_item_name){ return toast('Code & name required'); }
-        const { data, error } = await sb.rpc('admin_upsert_item', p);
-        if(error) return toast(error.message);
-        await loadItems(); renderItems(); updateKPIs(); toast('Item saved');
-      });
-    }
-    $('itemSearch').addEventListener('input', renderItems);
-    $('refreshItems').addEventListener('click', async ()=>{ await loadItems(); renderItems(); });
-
-    // Items configurator
-    $('itemsBody').addEventListener('click', async (e)=>{
-      const b=e.target.closest('button'); if(!b) return;
-      const act=b.dataset.act;
-      if(act==='cfg'){
-        const code=b.dataset.code;
-        const it=S.items.find(x=>x.item_id===code);
-        if(!it) return;
-        S.selectedItem = it;
-        openCfgModal();
-        $('cfgCodeInput').value = it.item_id;
-        $('cfgCodeInput').readOnly = true;
-        $('cfgName').textContent = it.item_name || '';
-        // Reset Change button and input affordances
-        const _btnEC = $('cfgEnableEditCode');
-        if(_btnEC){
-          _btnEC.textContent = 'Change';
-          _btnEC.classList.remove('save-glow');
-          _btnEC.dataset.mode = 'change';
-        }
-        $('cfgCodeInput').classList.remove('edit-pulse');
-        fillCfgRooms(); fillOwnerRoles(); fillPlanTypePicker(it);
-        if(it.room_name) $('cfgRoom').value = it.room_name;
-        // owner role best-effort (from comments if present)
-        $('cfgOwnerRole').value = '';
-        await loadItemPlan(code); renderPlan();
-      }
-    });
-
-    // Quick chips for frequency new
-    document.querySelectorAll('button[data-quick]').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const v=btn.getAttribute('data-quick'); const inp=$('planFreqNew'); if(inp) inp.value=v;
-      });
-    });
-
-    // Add plan row
-    $('planAdd').addEventListener('click', async ()=>{
-      if(!S.selectedItem) return toast('Select an item first');
-      const typeName = $('planTypeNew').value;
-      const freq = $('planFreqNew').value || '0 days';
-      if(!typeName) return toast('Choose a check type');
-      const { error } = await sb.rpc('admin_set_item_check', {
-        p_site_id: S.siteId,
-        p_item_code: S.selectedItem.item_id,
-        p_check_type_name: typeName,
-        p_frequency: freq,
-        p_warn_before: '3 days',
-        p_required: true,
-        p_active: true
-      });
-      if(error) return toast(error.message);
-      $('planFreqNew').value='';
-      await loadItemPlan(S.selectedItem.item_id); renderPlan(); toast('Check added');
-    });
-
-    // Save/remove plan rows
-    $('planBody').addEventListener('click', async (e)=>{
-      const b=e.target.closest('button'); if(!b) return;
-      const act=b.dataset.act, id=b.dataset.id;
-      if(act==='savePlan'){ await savePlanRow(id); }
-      if(act==='delPlan'){
-        if(!confirm('Remove this check from the plan?')) return;
-        const { error } = await sb.from('item_allowed_types').delete().eq('id', id).eq('site_id', S.siteId);
-        if(error) return toast(error.message);
-        await loadItemPlan(S.selectedItem.item_id); renderPlan(); toast('Removed');
-      }
-    });
-
-    // Save details (room + owner role)
-    $('cfgSaveDetails').addEventListener('click', async ()=>{
-      if(!S.selectedItem) return;
-      const roomName = $('cfgRoom').value;
-      const ownerRole = $('cfgOwnerRole').value;
-      // Save room via existing RPC
-      const { error } = await sb.rpc('admin_upsert_item', {
-        p_site_id: S.siteId,
-        p_item_id: $('cfgCodeInput').value.trim(),
-        p_item_name: S.selectedItem.item_name,
-        p_room_name: roomName,
-        p_category: S.selectedItem.category,
-        p_default_check_type_name: S.selectedItem.default_check_type_name || null,
-        p_comments: (S.selectedItem.comments||'').replace(/owner:\s*.*$/i,'').trim() + (ownerRole?` owner: ${ownerRole}`:'')
-      });
-      if(error) return toast(error.message);
-      await loadItems();
-      // refresh selected
-      S.selectedItem = S.items.find(x=>x.item_id===S.selectedItem.item_id);
-      toast('Details saved');
+      const { error: e2 } = await sb.from('submission_rows').insert(rows);
+      if (e2) { $('submitMsg').textContent = e2.message; return; }
+      $('submitMsg').textContent='Submitted!';
+      toast('Submission uploaded');
+      S.scans = [];
+      show('screen-reset');
+      showResetQR();
+      startResetCountdown(30);
     });
 
 
-    // Staff tab
-    $('addStaff').addEventListener('click', async ()=>{
-      const full_name=$('staffName').value.trim(); const role=$('staffRole').value;
-      if(!full_name) return;
-      const { error } = await sb.from('kiosk_users').insert({ site_id:S.siteId, full_name, role });
-      if(error) return toast(error.message);
-      $('staffName').value=''; await loadStaff(); renderStaff(); updateKPIs(); toast('Staff added');
-    });
-    $('staffBody').addEventListener('click', async (e)=>{
-      const b=e.target.closest('button'); if(!b) return;
-      const id=Number(b.dataset.id), act=b.dataset.act;
-      if(act==='setPin'){
-        const p = prompt('Enter new 4-digit PIN'); if(!p) return;
-        const { error } = await sb.rpc('set_kiosk_user_pin', { p_user_id:id, p_site_id:S.siteId, p_pin:p });
-        if(error) return toast(error.message);
-        // Also persist the plain PIN so the UI (which reads the plain column) stays in sync
-        await sb.from('kiosk_users').update({ pin: p }).eq('id', id).eq('site_id', S.siteId);
-        await loadStaff(); renderStaff(); toast('PIN set');
-      }
-      if(act==='renameStaff'){
-        const row=S.staff.find(x=>x.id===id); const name=prompt('New name', row?.full_name||''); if(!name) return;
-        const { error } = await sb.from('kiosk_users').update({ full_name:name }).eq('id', id).eq('site_id', S.siteId);
-        if(error) return toast(error.message);
-        await loadStaff(); renderStaff(); toast('Renamed');
-      }
-      if(act==='roleStaff'){
-        const row=S.staff.find(x=>x.id===id); const role=prompt('Role (admin/staff)', row?.role||'staff'); if(!role) return;
-        const { error } = await sb.from('kiosk_users').update({ role }).eq('id', id).eq('site_id', S.siteId);
-        if(error) return toast(error.message);
-        await loadStaff(); renderStaff(); toast('Role updated');
-      }
-      if(act==='delStaff'){
-        if(!confirm('Delete this staff member?')) return;
-        const { error } = await sb.from('kiosk_users').delete().eq('id', id).eq('site_id', S.siteId);
-        if(error) return toast(error.message);
-        await loadStaff(); renderStaff(); updateKPIs(); toast('Staff deleted');
-      }
-    });
+    init();
+</script>
+</body>
+</html>
 
-    // Audits
-    $('refreshAudits').addEventListener('click', async ()=>{ await loadAudits(); renderAudits(); });
-    $('auditSearch').addEventListener('input', renderAudits);
-    $('exportAudits').addEventListener('click', ()=>{
-      const rows = S.audits.map(a=>({
-        submitted_at: a.submitted_at,
-        staff_name: a.staff_name,
-        scanned_code: a.scanned_code,
-        item_name: a.item_name,
-        room: a.room,
-        check_type: a.check_type,
-        check_value: a.check_value
-      }));
-      const csv = Papa.unparse(rows);
-      download(`audits_site_${S.siteId}.csv`, csv);
-    });
-
-    // Initial picker listeners
-    const _itemRoomEl = $('itemRoom'); if(_itemRoomEl){ _itemRoomEl.addEventListener('change', ()=>{}); }
-    const _itemTypeEl = $('itemType'); if(_itemTypeEl){ _itemTypeEl.addEventListener('change', ()=>{}); }
-
-    // Modal close listeners
-    const _cfgClose = $('cfgClose'); if(_cfgClose){ _cfgClose.addEventListener('click', closeCfgModal); }
-    const _cfgModal = $('cfgModal')<truncated__content/>
