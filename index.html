@@ -489,24 +489,14 @@
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVudmVvcW5scW5vYnVmaHVibHl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwMTcyNzYsImV4cCI6MjA3MDU5MzI3Nn0.g93OsXDpO3V9DToU7s-Z3SwBBnB84rBv0JMv-idgSME";
     // Choose a safe storage (fallback if localStorage is blocked, e.g., Safari file://)
     function getSafeStorage(){
-  // Prefer localStorage so users stay signed in across tab closes and restarts.
-  try{
-    const k='__sb_test__';
-    window.localStorage.setItem(k,'1');
-    window.localStorage.removeItem(k);
-    return window.localStorage;
-  }catch(_){
-    try{
-      const k='__sb_test__';
-      window.sessionStorage.setItem(k,'1');
-      window.sessionStorage.removeItem(k);
-      return window.sessionStorage;
-    }catch(__){
-      // Last-resort in-memory stub (no persistence across refresh)
-      return { getItem(){return null;}, setItem(){}, removeItem(){} };
-    }
-  }
-}catch(_){
+      // Prefer sessionStorage so users stay signed in on refresh,
+      // but are cleared when the tab/window closes.
+      try{
+        const k='__sb_test__';
+        window.sessionStorage.setItem(k,'1');
+        window.sessionStorage.removeItem(k);
+        return window.sessionStorage;
+      }catch(_){
         try{
           const k='__sb_test__';
           window.localStorage.setItem(k,'1');
@@ -520,7 +510,7 @@
     const SB_STORAGE = getSafeStorage();
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
-        // Persist session using chosen storage (prefers localStorage; falls back to sessionStorage).
+        // Persist within this tab (sessionStorage). Survives refresh; clears on tab close.
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
@@ -704,12 +694,6 @@ if(document.readyState === 'loading'){
       }
       S.user = session.user;
       $('who').textContent = S.user.email || 'Signed in';
-
-      // --- UNGATE: show app immediately once we have a Supabase session ---
-      document.getElementById('loginPage')?.classList.add('hidden');
-      document.querySelector('.app')?.classList.remove('hidden');
-      $('panel-app')?.classList.remove('hidden');
-      // --- /UNGATE ---
       // Get profile -> site, auto-create if missing using user_metadata
       const { data: prof, error } = await sb
         .from('profiles')
