@@ -702,10 +702,31 @@ if(document.readyState === 'loading'){
         .select('site_id, full_name, role')
         .eq('user_id', S.user.id)
         .limit(1);
-      if(error){ toast(error.message); return; }
+      if(error){
+        logDebug('profiles select error: ' + (error?.message||error));
+        // Fallback to user metadata when RLS blocks profiles or table is missing
+        const meta = (S.user && S.user.user_metadata) || {};
+        const metaSite = Number(meta.site_id)||null;
+        const metaName = meta.full_name || null;
+        if(metaSite){
+          logDebug('Using metadata fallback for site: ' + metaSite);
+          S.profile = { site_id: metaSite, full_name: metaName, role: 'admin' };
+          S.siteId = metaSite;
+          $('site').textContent = `Site ${S.siteId}`;
+          document.getElementById('loginPage')?.classList.add('hidden');
+          document.querySelector('.app')?.classList.remove('hidden');
+          $('panel-app')?.classList.remove('hidden');
+          await refreshAll();
+          toast('Using metadata profile (profiles locked by RLS)');
+          return;
+        }
+        toast(error.message);
+        return;
+      }
 
       let profileRow = (prof && prof[0]) || null;
       if(!profileRow){
+        logDebug('No profile found from select; attempting metadata/auto-create path');
         // First login after email confirmation on a different device:
         // use metadata captured at sign-up to create the profile now.
         const meta = (S.user && S.user.user_metadata) || {};
@@ -1220,6 +1241,28 @@ if(document.readyState === 'loading'){
           return;
         }
         logDebug('Session received: ' + (!!data?.session));
+        // --- Begin session persistence and polling ---
+        try{
+          if(data?.session?.access_token && data?.session?.refresh_token){
+            logDebug('Persisting session explicitly via setSession()');
+            await sb.auth.setSession({
+              access_token: data.session.access_token,
+              refresh_token: data.session.refresh_token
+            });
+          }
+        }catch(e){
+          logDebug('setSession() failed: ' + (e?.message||e));
+        }
+        // Poll for session (handles rare timing where getSession lags signIn)
+        let tries = 0; let sessOk = false;
+        while(tries < 15){
+          const sNow = await sb.auth.getSession();
+          if(sNow?.data?.session){ sessOk = true; break; }
+          await new Promise(r=>setTimeout(r, 120));
+          tries++;
+        }
+        logDebug('Post-login session available: ' + sessOk + ' after ' + tries + ' checks');
+        // --- End session persistence and polling ---
         $('lpMsg').textContent='';
         logDebug("Calling init()...");
         await init();
@@ -1686,6 +1729,14 @@ if(document.readyState === 'loading'){
     const _cfgClose = $('cfgClose'); if(_cfgClose){ _cfgClose.addEventListener('click', closeCfgModal); }
     const _cfgModal = $('cfgModal'); if(_cfgModal){ _cfgModal.addEventListener('click', (e)=>{ if(e.target===_cfgModal) closeCfgModal(); }); }
     document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeCfgModal(); });
+    document.addEventListener('keydown', (e)=>{
+      if(e.key === '`'){
+        const box = document.getElementById('debugBox');
+        if(!box) return;
+        const hidden = box.classList.toggle('hidden');
+        if(!hidden) box.scrollTop = box.scrollHeight;
+      }
+    });
     const _riClose = $('roomItemsClose'); if(_riClose){ _riClose.addEventListener('click', closeRoomItemsModal); }
     const _riModal = $('roomItemsModal'); if(_riModal){ _riModal.addEventListener('click', (e)=>{ if(e.target===_riModal) closeRoomItemsModal(); }); }
     const _cfgEnableEditCode = $('cfgEnableEditCode');
