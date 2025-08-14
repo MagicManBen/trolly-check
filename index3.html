@@ -489,25 +489,14 @@
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVudmVvcW5scW5vYnVmaHVibHl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwMTcyNzYsImV4cCI6MjA3MDU5MzI3Nn0.g93OsXDpO3V9DToU7s-Z3SwBBnB84rBv0JMv-idgSME";
     // Choose a safe storage (fallback if localStorage is blocked, e.g., Safari file://)
     function getSafeStorage(){
-  // Prefer localStorage so users stay signed in across tab closes and restarts.
-  try{
-    const k='__sb_test__';
-    window.localStorage.setItem(k,'1');
-    window.localStorage.removeItem(k);
-    return window.localStorage;
-  }catch(_){
-    try{
-      const k='__sb_test__';
-      window.sessionStorage.setItem(k,'1');
-      window.sessionStorage.removeItem(k);
-      return window.sessionStorage;
-    }catch(__){
-      // Last-resort in-memory stub (no persistence across refresh)
-      return { getItem(){return null;}, setItem(){}, removeItem(){} };
-    }
-  }
-}
-catch(_){
+      // Prefer sessionStorage so users stay signed in on refresh,
+      // but are cleared when the tab/window closes.
+      try{
+        const k='__sb_test__';
+        window.sessionStorage.setItem(k,'1');
+        window.sessionStorage.removeItem(k);
+        return window.sessionStorage;
+      }catch(_){
         try{
           const k='__sb_test__';
           window.localStorage.setItem(k,'1');
@@ -520,24 +509,13 @@ catch(_){
     }
     const SB_STORAGE = getSafeStorage();
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-    // Persist session using chosen storage (prefers localStorage; falls back to sessionStorage).
-    storage: SB_STORAGE
-  }
-});
-
-    try{
-  const which = (SB_STORAGE === window.localStorage)
-    ? 'localStorage (persists across closes/restarts)'
-    : (SB_STORAGE === window.sessionStorage)
-      ? 'sessionStorage (survives refresh, clears on tab close)'
-      : 'in-memory (no persistence)';
-  logDebug('Auth persistence: ' + which);
-}catch(_){}
-// Connectivity test helper
+      auth: {
+        // Persist session using chosen storage (prefers localStorage; falls back to sessionStorage).
+        \1
+      }
+    });
+    logDebug('Auth persistence: sessionStorage (survives refresh, clears on tab close)');
+    // Connectivity test helper
     async function checkSupabaseConnectivity(){
       try{
         logDebug('Pinging Supabase /auth settings…');
@@ -713,12 +691,7 @@ if(document.readyState === 'loading'){
       }
       S.user = session.user;
       $('who').textContent = S.user.email || 'Signed in';
-      // --- UNGATE: show app immediately once we have a Supabase session ---
-document.getElementById('loginPage')?.classList.add('hidden');
-document.querySelector('.app')?.classList.remove('hidden');
-$('panel-app')?.classList.remove('hidden');
-// --- /UNGATE ---
-// Get profile -> site, auto-create if missing using user_metadata
+      // Get profile -> site, auto-create if missing using user_metadata
       const { data: prof, error } = await sb
         .from('profiles')
         .select('site_id, full_name, role')
@@ -1231,6 +1204,12 @@ $('panel-app')?.classList.remove('hidden');
       if(onFileProtocol){
         logDebug('Warning: Page loaded via file:// — some browsers (e.g., Safari) restrict auth/storage for the null origin. Running from http://localhost is recommended.');
       }
+
+      // Proactively clear any stale local session to avoid blocked second logins
+      try{
+        await sb.auth.signOut({ scope: 'local' });
+        logDebug('Cleared local session before sign-in.');
+      }catch(_){ /* ignore */ }
 
       $('lpMsg').textContent = 'Signing in…';
 
