@@ -5,6 +5,24 @@
   <title>CQC Admin — Sites, Rooms, Items, Staff</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <script>
+  (function(){
+    // Allow manual override with ?noipad in the URL
+    if (new URLSearchParams(location.search).has('noipad')) return;
+
+    // Detect iPad:
+    // 1) Older iPads include "iPad" in the user agent
+    // 2) iPadOS 13+ reports as "Mac" but has touch support
+    const ua = navigator.userAgent || navigator.vendor || window.opera;
+    const isIpadUA = /\biPad\b/i.test(ua);
+    const isIpadOS = (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    // If we're on an iPad and not already on the iPad page, redirect
+    if ((isIpadUA || isIpadOS) && !/indexipad\.html$/i.test(location.pathname)) {
+      location.replace('indexipad.html');
+    }
+  })();
+  </script>
   <style>
     :root{
       --bg:#0e0f11; --panel:#181a1e; --muted:#9aa0a6; --text:#e8eaed; --accent:#22c55e; --danger:#ef4444;
