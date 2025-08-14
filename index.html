@@ -555,9 +555,18 @@ sb.auth.onAuthStateChange(async (event) => {
     document.getElementById('loginPage')?.classList.remove('hidden');
   }
 });
-window.addEventListener('DOMContentLoaded', ()=>{
-  handleAuthRedirect().then(()=> init());
-});
+function __boot(){
+  try{
+    handleAuthRedirect().then(()=> init());
+  }catch(_){
+    try{ init(); }catch(__){}
+  }
+}
+if(document.readyState === 'loading'){
+  window.addEventListener('DOMContentLoaded', __boot);
+}else{
+  __boot();
+}
     // ====== STATE ======
     const S = {
       user: null, profile: null, siteId: null,
