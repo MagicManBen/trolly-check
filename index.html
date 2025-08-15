@@ -853,7 +853,7 @@
 
       function rowHTML(x, cls){
         const due = new Date(x.next_due_at);
-        const ownerTeam = S.typeTeamByName[x.check_type]?.name || '';
+        const ownerTeam = x.effective_team_name || S.typeTeamByName[x.check_type]?.name || '';
         const title = `${x.item_name} • ${x.check_type}`;
         const sub = `${x.room_name||''} • due ${due.toLocaleString()} • ${relTime(x.next_due_at)}`;
         const manageBtn = S.isAdminish ? `<button class="btn small" data-act="manageItem" data-code="${x.item_code}">Manage</button>` : '';
