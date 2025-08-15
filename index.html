@@ -165,13 +165,15 @@
   <div id="panel-login" class="login-screen">
     <div class="card login-card" id="panel-login-inner">
       <div class="brand-small">ClinicAssure</div>
-      <h1 class="login-title">Sign in</h1>
+      <h1 class="login-title" id="loginTitle">Sign in</h1>
       <div id="loginStack" class="login-stack">
         <input id="loginEmail" type="text" placeholder="email@example.com">
         <input id="loginPass" type="password" placeholder="Password">
         <button class="btn primary login-primary" id="doLogin">Sign in</button>
+        <!-- Primary action for the two‑step "join existing" flow (shown only during join) -->
+        <button class="btn primary login-primary hidden" id="joinPrimary">Continue</button>
       </div>
-      <div id="loginMsg" class="muted" style="margin-top:8px"></div>
+      <div id="loginMsg" class="muted" style="margin-top:10px; min-height:20px"></div>
       <!-- extra fields shown only in Sign-up mode -->
       <div id="signupRow" class="login-stack hidden" style="margin-top:10px">
         <input id="signupName" type="text" placeholder="Your full name">
@@ -378,36 +380,21 @@
                     </div>
                   </div>
 
-                  <div class="card" style="margin:0">
-                    <h3>Check plan</h3>
-                    <div class="grid cols-3" style="align-items:end">
-                      <div>
-                        <div class="muted">Check type</div>
-                        <select id="planTypeNew"></select>
-                      </div>
-                      <div>
-                        <div class="muted">Frequency (interval)</div>
-                        <input id="planFreqNew" type="text" placeholder="e.g., 1 week">
-                      </div>
-                      <div class="row" style="gap:8px">
-                        <button class="btn primary" id="planAdd">Add check</button>
-                        <div class="tools">
-                          <button class="btn small" data-quick="1 week">1w</button>
-                          <button class="btn small" data-quick="2 weeks">2w</button>
-                          <button class="btn small" data-quick="1 month">1m</button>
-                        </div>
-                      </div>
+                  <!-- Right column content replacing Check plan -->
+                  <div class="grid cols-2" style="margin:0; gap:12px">
+                    <div class="card">
+                      <h3>Recent checks</h3>
+                      <div id="recentChecks" class="list-mini"></div>
                     </div>
-
-                    <div class="table-wrap" style="margin-top:10px">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Type</th><th>Owner team</th><th>Frequency</th><th>Warn before</th><th>Required</th><th>Active</th><th></th>
-                          </tr>
-                        </thead>
-                        <tbody id="planBody"></tbody>
-                      </table>
+                    <div class="card">
+                      <h3>Actions</h3>
+                      <div class="grid cols-2">
+                        <button class="btn" id="itemActionRename">Rename item</button>
+                        <button class="btn warn" id="itemActionMove">Move to room…</button>
+                        <button class="btn" id="itemActionToggleActive">Deactivate / Activate</button>
+                        <button class="btn danger" id="itemActionDelete">Delete item</button>
+                      </div>
+                      <div class="muted" style="margin-top:8px">Deleting removes this item and its schedules/logs from your site.</div>
                     </div>
                   </div>
                 </div>
@@ -533,7 +520,6 @@
       typeTeamById: {}, typeTeamByName: {}
     };
     S.selectedItem = null;
-    S.selectedItemPlan = [];
 
     // ====== HELPERS ======
     function $(id){ return document.getElementById(id); }
@@ -653,28 +639,35 @@
           return true;
         }
 
-        // Look for a pending invite for this email
-        const { data: invites, error: invErr } = await sb.from('site_invites')
-          .select('site_id, role, status')
-          .eq('email', email);
-        if(invErr){ console.error(invErr); return false; }
-        const inv = (invites||[]).find(i => i.status === 'pending') || (invites||[])[0];
-        if(!inv) return false;
+        // Look up approval via RPC (bypasses RLS safely)
+        const { data: invData, error: rpcErr } = await sb.rpc('check_site_invite', { p_email: email });
+        if(rpcErr){ console.error(rpcErr); return false; }
+        const invRow = Array.isArray(invData) ? invData[0] : invData;
+        if(!invRow) return false;
 
-        // Create profile for this user in the invited site
+        const siteId = invRow.site_id;
+        const role = invRow.role || 'member';
+
+        // Insert profile (requires profiles_self_insert_if_invited policy)
         const { error: insErr } = await sb.from('profiles').insert({
-          user_id: user.id, site_id: inv.site_id, role: inv.role
+          user_id: user.id, site_id: siteId, role
         });
-        if(insErr){ console.error(insErr); toast(insErr.message); return false; }
+        if(insErr){
+          console.error('insert profile failed', insErr);
+          toast(insErr.message || 'Could not link your account to the surgery.');
+          return false;
+        }
 
-        // Mark invite accepted (best effort)
-        await sb.from('site_invites')
-          .update({ status: 'accepted', accepted_at: new Date().toISOString() })
-          .eq('site_id', inv.site_id)
-          .eq('email', email);
+        // Best-effort: mark invite accepted (ignore any policy errors)
+        try{
+          await sb.from('site_invites')
+            .update({ status: 'accepted', accepted_at: new Date().toISOString() })
+            .eq('site_id', siteId)
+            .eq('email', email);
+        }catch(_e){ /* ignore */ }
 
-        S.profile = { site_id: inv.site_id, role: inv.role, full_name: null };
-        S.siteId = inv.site_id;
+        S.profile = { site_id: siteId, role, full_name: null };
+        S.siteId = siteId;
         applyRoleGating();
         return true;
       }catch(e){
@@ -1071,54 +1064,6 @@
       const sorted=[...S.rooms].sort((a,b)=>a.name.localeCompare(b.name));
       if(sorted.length===0) mk('', '(no rooms yet)'); else sorted.forEach(r=>mk(r.id,r.name));
     }
-    function fillPlanTypePicker(item){
-      const tSel=$('planTypeNew'); if(!tSel) return; tSel.innerHTML='';
-      const types = S.typesByCat[item?.category||'general'] || S.typesByCat.general || [];
-      const mk=(v)=>{ const o=document.createElement('option'); o.value=v.name; o.textContent=v.name; tSel.appendChild(o); };
-      if(types.length===0){ const o=document.createElement('option'); o.value=''; o.textContent='(no types for category)'; tSel.appendChild(o); }
-      else types.forEach(mk);
-    }
-    function renderPlan(){
-      const tb=$('planBody'); if(!tb) return; tb.innerHTML='';
-      if(!S.selectedItem){ tb.innerHTML='<tr><td colspan="7" class="muted">Select an item.</td></tr>'; return; }
-      for(const row of S.selectedItemPlan){
-        const ownerTeam = (S.typeTeamByName[row.check_type_name]?.name) || '';
-        const tr=document.createElement('tr');
-        tr.innerHTML = `
-          <td>${row.check_type_name}</td>
-          <td>${ownerTeam ? `<span class="tag">${ownerTeam}</span>` : '<span class="muted">(none)</span>'}</td>
-          <td><input class="mono" type="text" data-field="frequency" data-id="${row.id}" value="${row.frequency||''}" placeholder="e.g., 1 week"></td>
-          <td><input class="mono" type="text" data-field="warn_before" data-id="${row.id}" value="${row.warn_before||'3 days'}" placeholder="e.g., 2 days"></td>
-          <td><input type="checkbox" data-field="required" data-id="${row.id}" ${row.required?'checked':''}></td>
-          <td><input type="checkbox" data-field="active" data-id="${row.id}" ${row.active?'checked':''}></td>
-          <td class="tools">
-            <button class="btn small" data-act="savePlan" data-id="${row.id}">Save</button>
-            <button class="btn small danger" data-act="delPlan" data-id="${row.id}">Remove</button>
-          </td>`;
-        tb.appendChild(tr);
-      }
-    }
-    async function savePlanRow(id){
-      const row = S.selectedItemPlan.find(x=>x.id===Number(id));
-      if(!row) return;
-      const freq = document.querySelector(`input[data-field="frequency"][data-id="${id}"]`)?.value || '0 days';
-      const warn = document.querySelector(`input[data-field="warn_before"][data-id="${id}"]`)?.value || '3 days';
-      const required = document.querySelector(`input[data-field="required"][data-id="${id}"]`)?.checked || false;
-      const active = document.querySelector(`input[data-field="active"][data-id="${id}"]`)?.checked || false;
-      // Use RPC to upsert by name
-      await sb.rpc('admin_set_item_check', {
-        p_site_id: S.siteId,
-        p_item_code: S.selectedItem.item_id,
-        p_check_type_name: row.check_type_name,
-        p_frequency: freq,
-        p_warn_before: warn,
-        p_required: required,
-        p_active: active
-      }).then(async ({ error })=>{
-        if(error) return toast(error.message);
-        await loadItemPlan(S.selectedItem.item_id); renderPlan(); toast('Plan saved');
-      });
-    }
 
     function renderStaff(){
       const tb=$('staffBody'); tb.innerHTML='';
@@ -1177,6 +1122,10 @@
       await sb.auth.signOut(); location.reload();
     });
 
+    function setLoginTitle(text){
+      const t = $('loginTitle') || document.querySelector('#panel-login .login-title');
+      if(t) t.textContent = text;
+    }
     // --- Auth mode toggle & helpers ---
     let authMode = 'login'; // or 'signup'
     function setAuthMode(mode){
@@ -1189,8 +1138,7 @@
       if(loginStack) loginStack.classList.remove('hidden');
       if(loginActions) loginActions.classList.remove('hidden');
       if (signupRow) signupRow.classList.toggle('hidden', mode !== 'signup');
-      const h = document.querySelector('#panel-login .login-title');
-      if (h) h.textContent = (mode === 'signup') ? 'Register your surgery' : 'Sign in';
+      setLoginTitle(mode === 'signup' ? 'Register your surgery' : 'Sign in');
       const loginBtn = $('doLogin');
       if (loginBtn) loginBtn.classList.toggle('hidden', mode === 'signup');
       const t = $('toggleAuth');
@@ -1234,40 +1182,160 @@
       if(confirmText) confirmText.textContent = `We\'ve sent a confirmation link to ${email}. After confirming, sign in here and we\'ll create your site “${site_name}” and set you as owner.`;
       if(confirmBlock) confirmBlock.classList.remove('hidden');
     });
+
+    // Server-side invite check using SECURITY DEFINER RPC function.
+    async function checkInvite(email){
+      const e = (email||'').trim().toLowerCase();
+      if(!e) return null;
+      try{
+        // Uses a SECURITY DEFINER SQL function that bypasses RLS
+        const { data, error } = await sb.rpc('check_site_invite', { p_email: e });
+        if(error) throw error;
+        // data may be a single row or array depending on Supabase version; normalize
+        const row = Array.isArray(data) ? (data[0]||null) : (data||null);
+        if(!row) return null;
+        return { site_id: row.site_id, role: row.role || 'member', site_name: row.site_name || '' };
+      }catch(err){
+        console.error('checkInvite RPC failed:', err);
+        return null;
+      }
+    }
+    // --- Sign up (invited member: join existing, TWO-STEP) ---
+    (function(){
+      let joinState = { step: 'start', email: '', siteId: null, siteName: '', role: 'member' };
+
+      function setJoinMode(step, info){
+        joinState = { ...joinState, step, ...(info||{}) };
+        const msg = $('loginMsg');
+        const loginStack = $('loginStack');
+        const signupRow = $('signupRow');
+        const loginBtn = $('doLogin');
+        const passInput = $('loginPass');
+        const actions = $('loginActions');
+        const btnJoin = $('doSignupInvited');     // ghost link-style button in the footer row
+        const btnJoinPrimary = $('joinPrimary');  // big green primary button inside the stack
+
+        // reset visibility we control
+        if (signupRow) signupRow.classList.add('hidden'); // never show owner sign-up here
+        if (loginStack) loginStack.classList.remove('hidden');
+        if (actions) actions.classList.remove('hidden');
+        if (btnJoinPrimary) { btnJoinPrimary.classList.add('hidden'); btnJoinPrimary.dataset.step = 'start'; }
+        if (msg) msg.textContent = '';
+
+        if (step === 'start') {
+          // Normal sign-in mode
+          setLoginTitle('Sign in');
+          if (passInput) { passInput.classList.remove('hidden'); passInput.placeholder = 'Password'; }
+          if (loginBtn) loginBtn.classList.remove('hidden');
+          if (btnJoin) { btnJoin.textContent = 'Create account (join existing)'; btnJoin.dataset.step = 'start'; }
+          if (btnJoinPrimary) btnJoinPrimary.classList.add('hidden');
+          return;
+        }
+
+        if (step === 'email') {
+          // First step of join: email only
+          setLoginTitle('Join existing surgery');
+          if (passInput) passInput.classList.add('hidden'); // hide password prompt
+          if (loginBtn)  loginBtn.classList.add('hidden');  // hide normal Sign in
+          if (actions)   actions.classList.add('hidden');   // hide footer buttons while in join flow
+          if (btnJoin)   { btnJoin.textContent = 'Create account (join existing)'; btnJoin.dataset.step = 'email'; } // leave dataset for safety
+          if (btnJoinPrimary) { btnJoinPrimary.textContent = 'Continue'; btnJoinPrimary.dataset.step = 'email'; btnJoinPrimary.classList.remove('hidden'); }
+          if (msg) msg.textContent = 'Enter your work email. We\'ll check it\'s approved.';
+          return;
+        }
+
+        if (step === 'password') {
+          // Second step of join: show surgery name + ask for password
+          setLoginTitle('Join “' + (joinState.siteName || 'your surgery') + '”');
+          if (passInput) { passInput.value=''; passInput.placeholder='Create a password'; passInput.classList.remove('hidden'); }
+          if (loginBtn)  loginBtn.classList.add('hidden');  // still hide normal Sign in
+          if (actions)   actions.classList.add('hidden');   // keep footer hidden during join flow
+          if (btnJoin)   { btnJoin.textContent = 'Create account (join existing)'; btnJoin.dataset.step = 'password'; }
+          if (btnJoinPrimary) { btnJoinPrimary.textContent = 'Create account'; btnJoinPrimary.dataset.step = 'password'; btnJoinPrimary.classList.remove('hidden'); }
+          if (msg) msg.innerHTML = `Approved for <b>${joinState.siteName || ('Site ' + joinState.siteId)}</b>. Create a password to finish.`;
+          return;
+        }
+      }
+
+      // Start in neutral (login) mode
+      setJoinMode('start');
+
+      // Footer ghost button just switches into the join flow (email step)
+      document.getElementById('doSignupInvited')?.addEventListener('click', ()=>{
+        setJoinMode('email', { email: ($('loginEmail')?.value||'').trim().toLowerCase() });
+      });
+
+      // Primary button drives the two-step flow
+      document.getElementById('joinPrimary')?.addEventListener('click', async ()=>{
+        const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+        const password = document.getElementById('loginPass').value;
+        const msg = document.getElementById('loginMsg');
+        const step = $('joinPrimary')?.dataset.step || 'email';
+
+        if (step === 'email') {
+          if (!email) { msg.textContent = 'Enter your email.'; return; }
+          msg.textContent = 'Checking approval…';
+          try{
+            const inv = await checkInvite(email);
+            if(!inv){ msg.textContent = 'This email is not approved. Please contact your manager.'; return; }
+            setJoinMode('password', { email, siteId: inv.site_id, siteName: inv.site_name, role: inv.role || 'member' });
+          }catch(e){
+            msg.textContent = e?.message || 'Could not check approval';
+          }
+          return;
+        }
+
+        if (step === 'password') {
+          if (!email) { msg.textContent = 'Enter your email.'; return; }
+          if (!password) { msg.textContent = 'Create a password.'; return; }
+          msg.textContent = 'Creating account…';
+          try{
+            const redirectTo = `${location.origin}/thanks.html`;
+            const { error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: redirectTo } });
+            if (error) { msg.textContent = error.message; return; }
+            // Switch UI to confirmation panel
+            const loginStack = $('loginStack');
+            const signupRow = $('signupRow');
+            const loginActions = $('loginActions');
+            const confirmBlock = $('signupConfirm');
+            const confirmText = $('signupConfirmText');
+            if(loginStack) loginStack.classList.add('hidden');
+            if(signupRow) signupRow.classList.add('hidden');
+            if(loginActions) loginActions.classList.add('hidden');
+            if(confirmText) confirmText.textContent = `We\'ve sent a confirmation link to ${email}. After confirming, come back here and sign in. We\'ll link you automatically to “${joinState.siteName||('Site ' + joinState.siteId)}”.`;
+            if(confirmBlock) confirmBlock.classList.remove('hidden');
+          }catch(e){
+            msg.textContent = e?.message || 'Sign-up failed';
+          }
+          return;
+        }
+      });
+
+      // Make sure toggling back to normal login resets join flow
+      document.getElementById('toggleAuth')?.addEventListener('click', ()=> setJoinMode('start'));
+      document.getElementById('gotoLogin')?.addEventListener('click', ()=> setJoinMode('start'));
+    })();
     // Invite team member button
-    
-$('sendInvite')?.addEventListener('click', async ()=>{
-  if(!S.isAdminish){ toast('Only admins can invite'); return; }
-  const email = ($('inviteEmail')?.value||'').trim().toLowerCase();
-  const role = ($('inviteRole')?.value||'member');
-  if(!email) return toast('Email required');
-  try{
-    const invited_by = S.user?.id || null;
-    // 1) Record invite locally (so auto-attach works on first login)
-    const { error } = await sb.from('site_invites').insert({
-      site_id: S.siteId, email, role, invited_by, status: 'pending'
-    });
-    if(error) throw error;
+    $('sendInvite')?.addEventListener('click', async ()=>{
+      if(!S.isAdminish){ toast('Only admins can invite'); return; }
+      const email = ($('inviteEmail')?.value||'').trim().toLowerCase();
+      const role = ($('inviteRole')?.value||'member');
+      if(!email) return toast('Email required');
+      try{
+        const invited_by = S.user?.id || null;
+        const { error } = await sb.from('site_invites').insert({
+          site_id: S.siteId, email, role, invited_by, status: 'pending'
+        });
+        if(error) throw error;
 
-    // 2) Ask backend to send an actual email invite (uses service role; secure)
-    const { data: sess } = await sb.auth.getSession();
-    const token = sess?.session?.access_token;
-    const res = await fetch(INVITE_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ site_id: S.siteId, email, role })
+        $('inviteMsg').textContent = `Approved: ${email}. Ask them to open this site, click “Create account (join existing)”, sign up with that email, and they’ll be added automatically.`;
+        $('inviteEmail').value = '';
+        toast('Approved');
+      }catch(err){
+        $('inviteMsg').textContent = err.message || 'Invite failed';
+        console.error(err);
+      }
     });
-    const out = await res.json().catch(()=>({}));
-    if(!res.ok) throw new Error(out.error || 'Failed to send invite email');
-
-    $('inviteMsg').textContent = `Invite email sent to ${email}.`;
-    $('inviteEmail').value = '';
-    toast('Invite sent');
-  }catch(err){
-    $('inviteMsg').textContent = err.message || 'Invite failed';
-    console.error(err);
-  }
-});
 
 
 
@@ -1278,6 +1346,7 @@ $('sendInvite')?.addEventListener('click', async ()=>{
     // --- Forgot password (sends reset email) ---
     document.getElementById('forgotLink')?.addEventListener('click', async (e)=>{
       e.preventDefault();
+      setLoginTitle('Forgot password');
       const email = document.getElementById('loginEmail').value.trim();
       const msg = document.getElementById('loginMsg');
       if (!email) { msg.textContent = 'Enter your email first.'; return; }
@@ -1315,11 +1384,93 @@ $('sendInvite')?.addEventListener('click', async ()=>{
       $('cfgCodeInput').classList.remove('edit-pulse');
       fillCfgRooms();
       fillOwnerRoles();
-      fillPlanTypePicker(it);
       if(it.room_name) $('cfgRoom').value = it.room_name;
       $('cfgOwnerRole').value = '';
-      loadItemPlan(code).then(()=> renderPlan());
+      renderRecentChecksForSelected();
       toast('Opened in configurator');
+    }
+
+    function renderRecentChecksForSelected(){
+      const box = $('recentChecks'); if(!box) return;
+      const it = S.selectedItem; if(!it){ box.innerHTML = '<div class="empty">No item selected</div>'; return; }
+      const rows = (S.audits||[])
+        .filter(a => (a.scanned_code === it.item_id) || (a.item_name === it.item_name))
+        .sort((a,b)=> new Date(b.submitted_at) - new Date(a.submitted_at))
+        .slice(0, 10);
+      if(rows.length === 0){
+        box.innerHTML = '<div class="empty">No recent checks</div>';
+        return;
+      }
+      box.innerHTML = rows.map(a => `
+        <div class="mini">
+          <div class="left">
+            <div class="title">${a.check_type||'Check'}</div>
+            <div class="sub">${fmtDate(a.submitted_at)} • ${a.staff_name||'—'} • value: ${a.check_value||''}</div>
+          </div>
+          <div class="right">
+            <span class="tag">${a.room||''}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Item actions
+    document.addEventListener('click', async (e)=>{
+      const b = e.target.closest('#itemActionRename, #itemActionMove, #itemActionToggleActive, #itemActionDelete');
+      if(!b) return;
+      if(!S.selectedItem){ toast('Open an item first'); return; }
+      const it = S.selectedItem;
+
+      if(b.id === 'itemActionRename'){
+        const name = prompt('New item name', it.item_name || '');
+        if(!name) return;
+        const { error } = await sb.from('items').update({ item_name: name }).eq('id', it.id).eq('site_id', S.siteId);
+        if(error) return toast(error.message);
+        await loadItems();
+        S.selectedItem = S.items.find(x=>x.id===it.id) || S.selectedItem;
+        $('cfgName').textContent = S.selectedItem.item_name;
+        renderItems(); renderRecentChecksForSelected();
+        toast('Item renamed');
+        return;
+      }
+
+      if(b.id === 'itemActionMove'){
+        $('cfgRoom')?.focus();
+        toast('Pick a room on the left, then click "Save details".');
+        return;
+      }
+
+      if(b.id === 'itemActionToggleActive'){
+        const nextActive = !(it.active === false);
+        const { error } = await sb.from('items').update({ active: !nextActive }).eq('id', it.id).eq('site_id', S.siteId);
+        if(error) return toast(error.message);
+        await loadItems();
+        S.selectedItem = S.items.find(x=>x.id===it.id) || S.selectedItem;
+        renderItems();
+        toast(S.selectedItem.active===false ? 'Item deactivated' : 'Item activated');
+        return;
+      }
+
+      if(b.id === 'itemActionDelete'){
+        if(!confirm('Delete this item and associated schedules/logs?')) return;
+        const { error } = await sb.from('items').delete().eq('id', it.id).eq('site_id', S.siteId);
+        if(error) return toast(error.message);
+        closeCfgModal();
+        await loadItems();
+        renderItems(); updateKPIs();
+        toast('Item deleted');
+        return;
+      }
+    });
+
+    // ====== Configure Panel Close Button ======
+    // Ensure the "Close" button in the configure panel hides the panel and clears selectedItem state.
+    const cfgCloseBtn = document.getElementById('cfgClose');
+    if (cfgCloseBtn) {
+      cfgCloseBtn.addEventListener('click', () => {
+        closeCfgModal();
+        S.selectedItem = null;
+      });
     }
     // Dashboard manage buttons
     document.getElementById('tab-dashboard').addEventListener('click', (e)=>{
@@ -1450,7 +1601,7 @@ $('sendInvite')?.addEventListener('click', async ()=>{
         });
         if(error){ toast(error.message); return; }
       }
-      await loadCheckTypeTeams(); buildTypeTeamMap(); renderTypes(); renderPlan(); renderDashboard();
+      await loadCheckTypeTeams(); buildTypeTeamMap(); renderTypes(); renderDashboard();
       toast('Team updated');
     }
     $('typesBody').addEventListener('change', async (e)=>{
@@ -1487,7 +1638,7 @@ $('sendInvite')?.addEventListener('click', async ()=>{
         const { error } = await sb.from('teams').delete().eq('id', id).eq('site_id', S.siteId);
         if(error) return toast(error.message);
         await Promise.all([loadTeams(), loadTeamMembers(), loadCheckTypeTeams()]);
-        buildTypeTeamMap(); renderTeams(); renderTypes(); renderPlan(); renderDashboard(); toast('Team deleted');
+        buildTypeTeamMap(); renderTeams(); renderTypes(); renderDashboard(); toast('Team deleted');
       }
       if(act==='addMember'){
         const teamId = Number(b.getAttribute('data-team'));
