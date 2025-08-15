@@ -522,7 +522,6 @@
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
     });
-    const INVITE_ENDPOINT = "/api/invite"; // Vercel serverless function path
 
     // ====== STATE ======
     const S = {
@@ -682,6 +681,28 @@
         return false;
       }
     }
+    // Poll for confirmation and auto sign-in on the ORIGINAL tab
+    let _confirmWaitTimer = null;
+    function startAutoLoginAfterConfirm(email, password, seconds=6, timeoutMinutes=10){
+      clearInterval(_confirmWaitTimer);
+      const deadline = Date.now() + timeoutMinutes*60*1000;
+      const msg = $('loginMsg');
+      if (msg) msg.textContent = 'We\'ve sent a confirmation link. After you click it, this page will sign you in automatically…';
+      _confirmWaitTimer = setInterval(async ()=>{
+        if (Date.now() > deadline) {
+          clearInterval(_confirmWaitTimer);
+          if (msg) msg.textContent = 'Still not confirmed. Check your email, then sign in normally.';
+          return;
+        }
+        const { error } = await sb.auth.signInWithPassword({ email, password });
+        if (!error) {
+          clearInterval(_confirmWaitTimer);
+          if (msg) msg.textContent = 'Confirmed! Signing you in…';
+          await init();
+        }
+      }, seconds*1000);
+    }
+
 
     function isPinSet(v){
       // Treat PIN as set when the plain pin column has a non-empty value
@@ -1216,13 +1237,24 @@
       const msg = document.getElementById('loginMsg');
       if (!email || !password) { msg.textContent = 'Enter email & password.'; return; }
       if (!site_name) { msg.textContent = 'Enter your surgery name.'; return; }
+      
       msg.textContent = 'Creating account…';
       // Cache pending details for after email confirmation
       localStorage.setItem('pendingSiteName', site_name);
       localStorage.setItem('pendingFullName', full_name);
-      const { data, error } = await sb.auth.signUp({ email, password });
+      // Redirect the email confirmation to a static thank-you page (no auto-login in the email tab)
+      const redirectTo = `${location.origin}/thanks.html`;
+      // Also stash details in user metadata as a fallback if localStorage origin differs
+      const { data, error } = await sb.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectTo,
+          data: { pending_site_name: site_name, pending_full_name: full_name }
+        }
+      });
       if (error) { msg.textContent = error.message; return; }
-      // Show confirm panel and explain next step
+// Show confirm panel and explain next step
       const loginStack = $('loginStack');
       const signupRow = $('signupRow');
       const loginActions = $('loginActions');
@@ -1233,43 +1265,29 @@
       if(loginActions) loginActions.classList.add('hidden');
       if(confirmText) confirmText.textContent = `We\'ve sent a confirmation link to ${email}. After confirming, sign in here and we\'ll create your site “${site_name}” and set you as owner.`;
       if(confirmBlock) confirmBlock.classList.remove('hidden');
+      // Begin polling for confirmation and auto-login in this tab
+      startAutoLoginAfterConfirm(email, password);
     });
     // Invite team member button
-    
-$('sendInvite')?.addEventListener('click', async ()=>{
-  if(!S.isAdminish){ toast('Only admins can invite'); return; }
-  const email = ($('inviteEmail')?.value||'').trim().toLowerCase();
-  const role = ($('inviteRole')?.value||'member');
-  if(!email) return toast('Email required');
-  try{
-    const invited_by = S.user?.id || null;
-    // 1) Record invite locally (so auto-attach works on first login)
-    const { error } = await sb.from('site_invites').insert({
-      site_id: S.siteId, email, role, invited_by, status: 'pending'
+    $('sendInvite')?.addEventListener('click', async ()=>{
+      if(!S.isAdminish){ toast('Only admins can invite'); return; }
+      const email = ($('inviteEmail')?.value||'').trim().toLowerCase();
+      const role = ($('inviteRole')?.value||'member');
+      if(!email) return toast('Email required');
+      try{
+        const invited_by = S.user?.id || null;
+        const { error } = await sb.from('site_invites').insert({
+          site_id: S.siteId, email, role, invited_by, status: 'pending'
+        });
+        if(error) throw error;
+        $('inviteMsg').textContent = `Invite recorded for ${email}. Ask them to create an account with this email; they'll be auto‑added on first login.`;
+        $('inviteEmail').value = '';
+        toast('Invite recorded');
+      }catch(err){
+        $('inviteMsg').textContent = err.message || 'Invite failed';
+        console.error(err);
+      }
     });
-    if(error) throw error;
-
-    // 2) Ask backend to send an actual email invite (uses service role; secure)
-    const { data: sess } = await sb.auth.getSession();
-    const token = sess?.session?.access_token;
-    const res = await fetch(INVITE_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ site_id: S.siteId, email, role })
-    });
-    const out = await res.json().catch(()=>({}));
-    if(!res.ok) throw new Error(out.error || 'Failed to send invite email');
-
-    $('inviteMsg').textContent = `Invite email sent to ${email}.`;
-    $('inviteEmail').value = '';
-    toast('Invite sent');
-  }catch(err){
-    $('inviteMsg').textContent = err.message || 'Invite failed';
-    console.error(err);
-  }
-});
-
-
 
     document.getElementById('gotoLogin')?.addEventListener('click', ()=>{
       setAuthMode('login');
@@ -1755,13 +1773,31 @@ $('sendInvite')?.addEventListener('click', async ()=>{
 </body>
 </html>
     // Sign up (invited member) — no surgery name required
-    document.getElementById('doSignupInvited')?.addEventListener('click', async ()=>{
-      const email = document.getElementById('loginEmail').value.trim().toLowerCase();
-      const password = document.getElementById('loginPass').value;
-      const msg = document.getElementById('loginMsg');
-      if (!email || !password) { msg.textContent = 'Enter email & password.'; return; }
-      msg.textContent = 'Creating account…';
-      const { error } = await sb.auth.signUp({ email, password });
+    
+document.getElementById('doSignupInvited')?.addEventListener('click', async ()=>{
+  const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+  const password = document.getElementById('loginPass').value;
+  const msg = document.getElementById('loginMsg');
+  if (!email || !password) { msg.textContent = 'Enter email & password.'; return; }
+  msg.textContent = 'Creating account…';
+  const redirectTo = `${location.origin}/thanks.html`;
+  const { error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: redirectTo } });
+  if (error) { msg.textContent = error.message; return; }
+  // Show confirm panel like owner sign-up
+  const loginStack = $('loginStack');
+  const signupRow = $('signupRow');
+  const loginActions = $('loginActions');
+  const confirmBlock = $('signupConfirm');
+  const confirmText = $('signupConfirmText');
+  if(loginStack) loginStack.classList.add('hidden');
+  if(signupRow) signupRow.classList.add('hidden');
+  if(loginActions) loginActions.classList.add('hidden');
+  if(confirmText) confirmText.textContent = `We've sent a confirmation link to ${email}. After confirming, come back here and we'll sign you in and link you to your surgery automatically if you were invited.`;
+  if(confirmBlock) confirmBlock.classList.remove('hidden');
+  // Begin polling for confirmation and auto-login
+  startAutoLoginAfterConfirm(email, password);
+});
+
       if (error) { msg.textContent = error.message; return; }
       // Show confirm panel like owner sign-up
       const loginStack = $('loginStack');
