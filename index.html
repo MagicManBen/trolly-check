@@ -31,11 +31,23 @@
     *{box-sizing:border-box}
     html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,system-ui,Segoe UI,Roboto,Arial,sans-serif}
     .app{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+    .app.sidebar-collapsed{grid-template-columns:56px 1fr}
     .sidebar{background:var(--panel);border-right:1px solid var(--line);padding:16px;position:sticky;top:0;height:100vh}
+    .sidebar.collapsed .brand,
+    .sidebar.collapsed .status,
+    .sidebar.collapsed .nav{display:none}
+    .collapse-btn{position:absolute;top:10px;right:10px;min-width:32px;padding:6px 8px}
+    .sidebar{position:sticky}
     .brand{font-weight:800;font-size:18px;margin-bottom:12px}
     .status{font-size:12px;color:var(--muted);margin-bottom:16px}
     .nav button{width:100%;text-align:left;background:transparent;border:1px solid var(--line);color:var(--text);padding:10px 12px;border-radius:10px;margin-bottom:8px;cursor:pointer}
     .nav button.active{background:var(--accent);border-color:transparent;color:#04130a;font-weight:700}
+    /* Grouped nav menus */
+    .menu-toggle{font-weight:700}
+    .submenu{display:none;margin:6px 0 10px 0;padding-left:8px;border-left:1px solid var(--line)}
+    .submenu.open{display:block}
+    .nav .submenu button{width:100%;text-align:left;background:#14171c;border-color:var(--line);margin:6px 0 0 0}
+    .nav .submenu button.active{background:var(--accent);color:#04130a}
     .main{padding:18px 18px 80px}
     .row{display:flex;gap:10px;align-items:center}
     .grid{display:grid;gap:12px}
@@ -195,21 +207,27 @@
   </div>
   <div id="appRoot" class="app hidden">
     <aside class="sidebar">
+      <button id="toggleSidebar" class="btn small collapse-btn" title="Collapse sidebar">⟨</button>
       <div class="brand">ClinicAssure</div>
       <div class="status">
         <div id="who">Not signed in</div>
         <div id="site" class="muted">—</div>
       </div>
-      <div class="nav">
-        <button data-tab="tab-dashboard" class="active">Dashboard</button>
-        <button data-tab="tab-rooms">Rooms</button>
-        <button data-tab="tab-types">Check Types</button>
-        <button data-tab="tab-items">Items</button>
-        <button data-tab="tab-staff">Staff</button>
-        <button data-tab="tab-teams">Teams</button>
-        <button data-tab="tab-audits">Audit Log</button>
-        <div class="hr"></div>
-        <button id="btnLogout">Logout</button>
+      <div class="nav" id="sidebar">
+        <button data-tab="tab-dashboard" onclick="showSection('dashboard')">Dashboard</button>
+
+        <button class="menu-toggle" onclick="toggleSubmenu('surgery-setup-submenu')">Surgery Set Up</button>
+        <div id="surgery-setup-submenu" class="submenu">
+          <button data-tab="tab-rooms" onclick="showSection('rooms')">Rooms</button>
+          <button data-tab="tab-types" onclick="showSection('check-types')">Check Types</button>
+          <button data-tab="tab-items" onclick="showSection('items')">Items</button>
+        </div>
+
+        <button class="menu-toggle" onclick="toggleSubmenu('team-setup-submenu')">Team Set Up</button>
+        <div id="team-setup-submenu" class="submenu">
+          <button data-tab="tab-staff" onclick="showSection('staff')">Staff</button>
+          <button data-tab="tab-teams" onclick="showSection('teams')">Teams</button>
+        </div>
       </div>
     </aside>
 
@@ -288,14 +306,10 @@
         <!-- ROOMS -->
         <section id="tab-rooms" class="hidden">
           <div class="card">
-            <h3>Add room</h3>
-            <div class="row">
-              <input id="roomName" type="text" placeholder="Room name">
-              <button class="btn primary" id="addRoom">Add</button>
+            <div class="row" style="justify-content:space-between;align-items:center">
+              <h3>Rooms</h3>
+              <button class="btn small" id="openAddRoomModal" title="Add room">＋</button>
             </div>
-          </div>
-          <div class="card">
-            <h3>Rooms</h3>
             <div class="table-wrap">
               <table>
                 <thead><tr><th>Name</th><th>Owner</th><th>Actions</th></tr></thead>
@@ -502,6 +516,31 @@
     </div>
   </div>
 
+  <!-- Add Room Modal -->
+  <div id="addRoomModal" class="modal-overlay hidden">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <div class="title-lg">Add room</div>
+        <div class="right"><button class="btn" id="addRoomCancel">Close</button></div>
+      </div>
+      <div class="modal-body">
+        <div class="grid cols-2">
+          <div>
+            <div class="muted">Room name</div>
+            <input id="addRoomName" type="text" placeholder="e.g., Treatment Room 1">
+          </div>
+          <div>
+            <div class="muted">Owner (staff, optional)</div>
+            <select id="addRoomOwner"></select>
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px;justify-content:flex-end">
+          <button class="btn primary" id="addRoomSave">Add room</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     // ====== CONFIG ======
     const SUPABASE_URL = "https://unveoqnlqnobufhublyw.supabase.co";
@@ -701,6 +740,25 @@
       if(m) m.classList.remove('hidden');
     }
     function closeRoomItemsModal(){ const m=$('roomItemsModal'); if(m) m.classList.add('hidden'); }
+
+    // Sidebar collapse/expand
+    function applySidebarState(){
+      const collapsed = localStorage.getItem('sidebarCollapsed') === '1';
+      const app = document.querySelector('.app');
+      const side = document.querySelector('.sidebar');
+      const btn = document.getElementById('toggleSidebar');
+      if(app) app.classList.toggle('sidebar-collapsed', collapsed);
+      if(side) side.classList.toggle('collapsed', collapsed);
+      if(btn) btn.textContent = collapsed ? '⟩' : '⟨';
+      if(btn) btn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+    }
+    function toggleSidebar(){
+      const collapsed = localStorage.getItem('sidebarCollapsed') === '1';
+      localStorage.setItem('sidebarCollapsed', collapsed ? '0' : '1');
+      applySidebarState();
+    }
+    document.getElementById('toggleSidebar')?.addEventListener('click', toggleSidebar);
+    applySidebarState();
 
     // ====== INIT & AUTH ======
     async function init(){
@@ -1356,7 +1414,46 @@
     });
 
     // Navigation
-    document.querySelectorAll('.nav button[data-tab]').forEach(b=>b.addEventListener('click', ()=> setActiveTab(b.dataset.tab)));
+    // Expand/collapse submenu groups
+    function toggleSubmenu(id){
+      const panel = document.getElementById(id);
+      if(!panel) return;
+      const isOpen = panel.classList.toggle('open');
+      const toggle = panel.previousElementSibling;
+      if(toggle && toggle.classList.contains('menu-toggle')){
+        toggle.setAttribute('aria-expanded', String(isOpen));
+      }
+    }
+    // Section switching that also highlights the active nav button and ensures its group is open
+    function showSection(key){
+      const map = {
+        'dashboard':'tab-dashboard',
+        'rooms':'tab-rooms',
+        'check-types':'tab-types',
+        'items':'tab-items',
+        'staff':'tab-staff',
+        'teams':'tab-teams',
+        'audits':'tab-audits'
+      };
+      const id = map[key] || key;
+      // Switch content
+      setActiveTab(id);
+      // Highlight the corresponding nav button
+      document.querySelectorAll('.nav button[data-tab]').forEach(b=>{
+        b.classList.toggle('active', b.dataset.tab === id);
+      });
+      // Ensure parent submenu is open
+      const btn = document.querySelector(`.nav button[data-tab="${id}"]`);
+      const parentSub = btn ? btn.closest('.submenu') : null;
+      if(parentSub && !parentSub.classList.contains('open')){
+        parentSub.classList.add('open');
+        const toggle = parentSub.previousElementSibling;
+        if(toggle && toggle.classList.contains('menu-toggle')){
+          toggle.setAttribute('aria-expanded','true');
+        }
+      }
+    }
+    document.querySelectorAll('.nav button[data-tab]').forEach(b=>b.addEventListener('click', ()=> showSection((b.dataset.tab||'').replace('tab-',''))));
     $('btnRefresh').addEventListener('click', refreshAll);
     $('globalSearch').addEventListener('input', ()=>{ renderItems(); renderAudits(); });
 
@@ -1478,12 +1575,36 @@
       const code=b.dataset.code; openItemInForm(code);
     });
 
-    // Rooms tab
-    $('addRoom').addEventListener('click', async ()=>{
-      const name=$('roomName').value.trim(); if(!name) return;
-      const { error } = await sb.from('rooms').insert({ site_id:S.siteId, name });
-      if(error) return toast(error.message);
-      $('roomName').value=''; await loadRooms(); renderRooms(); fillItemPickers(); updateKPIs(); toast('Room added');
+    // Add Room modal helpers
+    function openAddRoomModal(){
+      const m = $('addRoomModal'); if(!m) return;
+      // Fill owner select
+      const sel = $('addRoomOwner');
+      if(sel){
+        sel.innerHTML = '';
+        const mk=(v,l)=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; sel.appendChild(o); };
+        mk('', '(none)');
+        const sortedStaff = [...(S.staff||[])].sort((a,b)=> (a.full_name||'').localeCompare(b.full_name||''));
+        sortedStaff.forEach(s=> mk(String(s.id), s.full_name));
+      }
+      const name = $('addRoomName'); if(name){ name.value=''; name.focus(); }
+      m.classList.remove('hidden');
+    }
+    function closeAddRoomModal(){
+      $('addRoomModal')?.classList.add('hidden');
+    }
+    $('openAddRoomModal')?.addEventListener('click', openAddRoomModal);
+    $('addRoomCancel')?.addEventListener('click', closeAddRoomModal);
+    $('addRoomSave')?.addEventListener('click', async ()=>{
+      const name = ($('addRoomName')?.value||'').trim();
+      const ownerVal = $('addRoomOwner')?.value || '';
+      const owner = ownerVal ? Number(ownerVal) : null;
+      if(!name){ toast('Enter a room name'); return; }
+      const { error } = await sb.from('rooms').insert({ site_id:S.siteId, name, occupied_by: owner });
+      if(error){ toast(error.message); return; }
+      closeAddRoomModal();
+      await loadRooms(); renderRooms(); fillItemPickers(); updateKPIs();
+      toast('Room added');
     });
     $('roomsBody').addEventListener('click', async (e)=>{
       const btn=e.target.closest('button'); if(!btn) return;
