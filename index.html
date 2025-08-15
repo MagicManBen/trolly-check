@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>CQC Admin — Sites, Rooms, Items, Staff</title>
+  <title>ClinicAssure — Sites, Rooms, Items, Staff</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes">
   <script>
@@ -59,6 +59,19 @@
     .pill{padding:6px 10px;border:1px solid var(--line);border-radius:999px;background:#1e232b;font-size:12px}
     .right{display:flex;gap:8px;align-items:center}
     .hidden{display:none !important}
+    /* Full-screen login screen */
+    .login-screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);z-index:2000;padding:20px}
+    .login-screen .card{width:min(720px,92vw)}
+    /* --- Login visual --- */
+    .login-card{max-width:520px;margin:auto;padding:24px 24px 18px 24px}
+    .brand-small{font-size:14px;color:var(--muted);font-weight:700;margin-bottom:6px}
+    .login-title{font-size:28px;font-weight:900;margin:0 0 14px 0}
+    .login-stack{display:flex;flex-direction:column;gap:10px}
+    .login-stack input,.login-stack select{height:44px;font-size:15px}
+    .login-primary{height:44px;width:100%;font-weight:800}
+    .login-actions{display:flex;gap:10px;margin-top:10px}
+    .btn.ghost{background:transparent;border:1px solid var(--line)}
+    .btn.ghost:hover{background:#1a1f26}
     .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:#0f1216;border:1px solid var(--line);padding:10px 14px;border-radius:10px}
     .danger-text{color:var(--danger)}
     .success-text{color:var(--accent)}
@@ -149,9 +162,39 @@
   <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
 </head>
 <body>
-  <div class="app">
+  <div id="panel-login" class="login-screen">
+    <div class="card login-card" id="panel-login-inner">
+      <div class="brand-small">ClinicAssure</div>
+      <h1 class="login-title">Sign in</h1>
+      <div id="loginStack" class="login-stack">
+        <input id="loginEmail" type="text" placeholder="email@example.com">
+        <input id="loginPass" type="password" placeholder="Password">
+        <button class="btn primary login-primary" id="doLogin">Sign in</button>
+      </div>
+      <div id="loginMsg" class="muted" style="margin-top:8px"></div>
+      <!-- extra fields shown only in Sign-up mode -->
+      <div id="signupRow" class="login-stack hidden" style="margin-top:10px">
+        <input id="signupName" type="text" placeholder="Full name">
+        <select id="signupSiteSel">
+          <option value="" disabled selected>Select a site…</option>
+        </select>
+        <button class="btn primary login-primary" id="doSignup">Create account</button>
+      </div>
+      <div id="signupConfirm" class="hidden" style="margin-top:12px">
+        <div id="signupConfirmText" class="muted"></div>
+        <div style="margin-top:10px">
+          <button class="btn primary login-primary" id="gotoLogin">Sign in</button>
+        </div>
+      </div>
+      <div id="loginActions" class="login-actions">
+        <button class="btn ghost" id="toggleAuth">Create an account</button>
+        <button class="btn ghost" id="forgotLink">Forgot password?</button>
+      </div>
+    </div>
+  </div>
+  <div id="appRoot" class="app hidden">
     <aside class="sidebar">
-      <div class="brand">CQC Admin</div>
+      <div class="brand">ClinicAssure</div>
       <div class="status">
         <div id="who">Not signed in</div>
         <div id="site" class="muted">—</div>
@@ -170,31 +213,8 @@
     </aside>
 
     <main class="main">
-      <!-- LOGIN PANEL -->
-      <div id="panel-login" class="card">
-        <h3>Sign in</h3>
-        <div class="grid cols-3">
-          <div><input id="loginEmail" type="text" placeholder="email@example.com"></div>
-          <div><input id="loginPass" type="password" placeholder="Password"></div>
-          <div><button class="btn primary" id="doLogin">Sign in</button></div>
-        </div>
-        <div id="loginMsg" class="muted" style="margin-top:8px"></div>
-
-        <div class="muted" style="margin-top:10px">
-          <a href="#" id="toggleAuth">Create an account</a>
-          &nbsp;•&nbsp;
-          <a href="#" id="forgotLink">Forgot password?</a>
-        </div>
-
-        <!-- extra fields shown only in Sign-up mode -->
-        <div id="signupRow" class="grid cols-3 hidden" style="margin-top:10px">
-          <div><input id="signupName" type="text" placeholder="Full name"></div>
-          <div><input id="signupSite" type="number" placeholder="Site ID"></div>
-          <div><button class="btn" id="doSignup">Create account</button></div>
-        </div>
-      </div>
       <!-- MAIN APP PANEL -->
-      <div id="panel-app" class="hidden">
+      <div id="panel-app">
         <div class="topbar">
           <div class="pill">Admin</div>
           <div class="right">
@@ -488,7 +508,9 @@
     // ====== CONFIG ======
     const SUPABASE_URL = "https://unveoqnlqnobufhublyw.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVudmVvcW5scW5vYnVmaHVibHl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwMTcyNzYsImV4cCI6MjA3MDU5MzI3Nn0.g93OsXDpO3V9DToU7s-Z3SwBBnB84rBv0JMv-idgSME";
-    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    });
 
     // ====== STATE ======
     const S = {
@@ -583,18 +605,34 @@
     // ====== INIT & AUTH ======
     async function init(){
       const { data:{ session } } = await sb.auth.getSession();
-      if(!session){ $('panel-login').classList.remove('hidden'); $('panel-app').classList.add('hidden'); return; }
+      if(!session){
+        // Show separate login screen, hide the app completely
+        $('panel-login')?.classList.remove('hidden');
+        $('appRoot')?.classList.add('hidden');
+        $('who').textContent = 'Not signed in';
+        $('site').textContent = '—';
+        return;
+      }
+      // Logged in → hide login, show app
       S.user = session.user;
+      $('panel-login')?.classList.add('hidden');
+      $('appRoot')?.classList.remove('hidden');
       $('who').textContent = S.user.email || 'Signed in';
+
       // Get profile -> site
       const { data: prof, error } = await sb.from('profiles').select('site_id, full_name, role').eq('user_id', S.user.id).limit(1);
       if(error || !prof || !prof.length){ $('site').textContent='No profile/site'; toast(error?.message||'No profile'); return; }
       S.profile = prof[0]; S.siteId = S.profile.site_id;
       $('site').textContent = `Site ${S.siteId}`;
-      $('panel-login').classList.add('hidden');
-      $('panel-app').classList.remove('hidden');
+
       await refreshAll();
     }
+
+    // Keep UI in sync with auth state and persist session across reloads
+    sb.auth.onAuthStateChange((_event, _session) => {
+      // Re-run init whenever auth state changes (sign in/out, token refresh)
+      init();
+    });
 
     async function refreshAll(){
       await Promise.all([
@@ -1022,25 +1060,50 @@
     let authMode = 'login'; // or 'signup'
     function setAuthMode(mode){
       authMode = mode;
-      const signupRow = document.getElementById('signupRow');
+      const signupRow = $('signupRow');
+      const loginStack = $('loginStack');
+      const loginActions = $('loginActions');
+      const confirmBlock = $('signupConfirm');
+      if(confirmBlock) confirmBlock.classList.add('hidden');
+      if(loginStack) loginStack.classList.remove('hidden');
+      if(loginActions) loginActions.classList.remove('hidden');
       if (signupRow) signupRow.classList.toggle('hidden', mode !== 'signup');
-      const h = document.querySelector('#panel-login h3');
+      const h = document.querySelector('#panel-login .login-title');
       if (h) h.textContent = (mode === 'signup') ? 'Create an account' : 'Sign in';
-      const t = document.getElementById('toggleAuth');
+      const loginBtn = $('doLogin');
+      if (loginBtn) loginBtn.classList.toggle('hidden', mode === 'signup');
+      const t = $('toggleAuth');
       if (t) t.textContent = (mode === 'signup') ? 'Have an account? Sign in' : 'Create an account';
-      const msg = document.getElementById('loginMsg');
+      const msg = $('loginMsg');
       if (msg) msg.textContent = '';
+      if(mode === 'signup') loadSitesToSelect();
     }
     document.getElementById('toggleAuth')?.addEventListener('click', (e)=>{
       e.preventDefault(); setAuthMode(authMode === 'login' ? 'signup' : 'login');
     });
+    // Default to login layout on first render
+    setAuthMode('login');
+
+    // --- Helper: load sites into select for signup ---
+    async function loadSitesToSelect(){
+      const sel = document.getElementById('signupSiteSel');
+      if(!sel) return;
+      try{
+        const { data, error } = await sb.from('sites').select('id,name').order('name');
+        if(error) throw error;
+        sel.innerHTML = '<option value="" disabled selected>Select a site…</option>' +
+          (data||[]).map(s => `<option value="${s.id}">${s.name||('Site '+s.id)}</option>`).join('');
+      }catch(err){
+        sel.innerHTML = '<option value="" disabled selected>(no sites found)</option>';
+      }
+    }
 
     // --- Sign up (email & password) ---
     document.getElementById('doSignup')?.addEventListener('click', async ()=>{
       const email = document.getElementById('loginEmail').value.trim();
       const password = document.getElementById('loginPass').value;
       const full_name = document.getElementById('signupName').value.trim();
-      const site_id = Number(document.getElementById('signupSite').value || 1);
+      const site_id = Number(document.getElementById('signupSiteSel').value || 1);
       const msg = document.getElementById('loginMsg');
       if (!email || !password) { msg.textContent = 'Enter email & password.'; return; }
       msg.textContent = 'Creating account…';
@@ -1053,7 +1116,19 @@
           await sb.from('profiles').insert({ user_id: userId, site_id, full_name, role: 'admin' });
         }
       } catch(_) { /* ignore insert errors (e.g., row exists or trigger handles it) */ }
-      msg.textContent = 'Account created. Check your email to confirm, then sign in.';
+      const loginStack = $('loginStack');
+      const signupRow = $('signupRow');
+      const loginActions = $('loginActions');
+      const confirmBlock = $('signupConfirm');
+      const confirmText = $('signupConfirmText');
+      if(loginStack) loginStack.classList.add('hidden');
+      if(signupRow) signupRow.classList.add('hidden');
+      if(loginActions) loginActions.classList.add('hidden');
+      if(confirmText) confirmText.textContent = `We\'ve sent a confirmation link to ${email}. Please confirm your email, then sign in.`;
+      if(confirmBlock) confirmBlock.classList.remove('hidden');
+    });
+
+    document.getElementById('gotoLogin')?.addEventListener('click', ()=>{
       setAuthMode('login');
     });
 
@@ -1533,6 +1608,7 @@
 
     // Kick off
     init();
+    loadSitesToSelect();
   </script>
 </body>
 </html>
