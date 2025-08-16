@@ -55,6 +55,56 @@
     .grid.cols-3{grid-template-columns:1fr 1fr 1fr}
     .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
     .card h3{margin:0 0 10px 0}
+
+    /* Room cards grid layout for Rooms page */
+    #roomsBody.card-container {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      align-items: stretch;
+    }
+    /* Consistent Room card sizing and vertical spacing */
+    .card.room-card {
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 150px;
+      height: 100%;
+    }
+
+    .card.compact-card {
+      padding: 8px 10px;
+      display: flex;
+      align-items: center;
+      height: auto;
+      min-height: auto;
+    }
+
+    /* --- ROOMS PAGE: Right panel items/owners height match --- */
+    #tab-rooms .table-wrap.fill-h {
+      height: calc(100vh - 220px);
+    }
+    #tab-rooms .right-panel-items {
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 220px);
+      gap: 12px;
+    }
+    #tab-rooms .right-panel-items .table-wrap {
+      flex: 1 1 0;
+      min-height: 0;
+      /* Each box gets 50% of right panel height, minus gap */
+      height: calc(50% - 6px);
+      display: flex;
+      flex-direction: column;
+    }
+    /* Ensure the inner content scrolls if needed */
+    #tab-rooms .right-panel-items .table-wrap > div[style*="overflow-y:auto"] {
+      flex: 1 1 0;
+      min-height: 0;
+      overflow-y: auto;
+    }
     .muted{color:var(--muted)}
     .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--btn);border:1px solid var(--line);color:var(--text);padding:10px 12px;border-radius:10px;cursor:pointer}
     .btn.primary{background:var(--accent);border-color:transparent;color:#04130a;font-weight:700}
@@ -90,6 +140,7 @@
     .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
     .hr{border-top:1px solid var(--line);margin:12px 0}
     .table-wrap{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card);max-height:60vh;overflow:auto}
+    .table-wrap.fill-h{max-height:none;height:calc(100vh - 220px);}
     .chip{padding:4px 8px;border:1px solid var(--line);border-radius:999px;font-size:12px;background:#1e232b;cursor:pointer}
     .chip:hover{background:#222}
     .tag{padding:2px 8px;border:1px solid var(--line);border-radius:999px;font-size:12px;background:#1e232b}
@@ -217,14 +268,14 @@
         <button data-tab="tab-dashboard" onclick="showSection('dashboard')">Dashboard</button>
 
         <button class="menu-toggle" onclick="toggleSubmenu('surgery-setup-submenu')">Surgery Set Up</button>
-        <div id="surgery-setup-submenu" class="submenu">
+        <div id="surgery-setup-submenu" class="submenu open">
           <button data-tab="tab-rooms" onclick="showSection('rooms')">Rooms</button>
           <button data-tab="tab-types" onclick="showSection('check-types')">Check Types</button>
           <button data-tab="tab-items" onclick="showSection('items')">Items</button>
         </div>
 
         <button class="menu-toggle" onclick="toggleSubmenu('team-setup-submenu')">Team Set Up</button>
-        <div id="team-setup-submenu" class="submenu">
+        <div id="team-setup-submenu" class="submenu open">
           <button data-tab="tab-staff" onclick="showSection('staff')">Staff</button>
           <button data-tab="tab-teams" onclick="showSection('teams')">Teams</button>
         </div>
@@ -306,15 +357,25 @@
         <!-- ROOMS -->
         <section id="tab-rooms" class="hidden">
           <div class="card">
-            <div class="row" style="justify-content:space-between;align-items:center">
-              <h3>Rooms</h3>
-              <button class="btn small" id="openAddRoomModal" title="Add room">＋</button>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>Name</th><th>Owner</th><th>Actions</th></tr></thead>
-                <tbody id="roomsBody"></tbody>
-              </table>
+            <div style="display: flex; gap: 24px; align-items: stretch;">
+              <div class="table-wrap fill-h" style="flex: 2;">
+                <div class="row" style="justify-content:space-between;align-items:center">
+                  <h3><span style="color: green;">Rooms</span></h3>
+                  <button class="btn small" id="openAddRoomModal" title="Add room">＋</button>
+                </div>
+                <!-- Card grid for Rooms -->
+                <div id="roomsBody" class="card-container"></div>
+              </div>
+              <div class="right-panel-items" style="flex: 1; display:flex; flex-direction:column; gap:12px;">
+                <div class="table-wrap" style="flex: 1;">
+                  <div class="row" style="justify-content:space-between;align-items:center"><h3>Items</h3></div>
+                  <div id="roomsCardsTop" style="overflow-y:auto; flex:1; padding: 8px;"></div>
+                </div>
+                <div class="table-wrap" style="flex: 1;">
+                  <div class="row" style="justify-content:space-between;align-items:center"><h3>Room Owners</h3></div>
+                  <div id="roomsCardsBottom" style="overflow-y:auto; flex:1; padding: 8px;"></div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -545,9 +606,11 @@
     // ====== CONFIG ======
     const SUPABASE_URL = "https://unveoqnlqnobufhublyw.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVudmVvcW5scW5vYnVmaHVibHl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwMTcyNzYsImV4cCI6MjA3MDU5MzI3Nn0.g93OsXDpO3V9DToU7s-Z3SwBBnB84rBv0JMv-idgSME";
-    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
-    });
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+  // Always bypass browser/proxy caches
+  global: { fetch: (url, options = {}) => fetch(url, { ...options, cache: 'no-store' }) }
+});
     const INVITE_ENDPOINT = "/api/invite"; // Vercel serverless function path
 
     // ====== STATE ======
@@ -990,31 +1053,79 @@
 
     // ====== RENDERERS ======
     function renderRooms(){
-      const tb=$('roomsBody'); tb.innerHTML='';
-      const staffById = Object.fromEntries((S.staff||[]).map(s=>[s.id, s.full_name]));
+      // Render Rooms as cards in the .card-container
+      const tb = $('roomsBody');
+      if (!tb) return;
+      tb.innerHTML = '';
+      const staffById = Object.fromEntries([...(S.staff||[])].map(s => [s.id, s.full_name]));
       const staffOptions = ['<option value="">(none)</option>']
-        .concat((S.staff||[]).map(s=>`<option value="${s.id}">${s.full_name}</option>`))
+        .concat([...(S.staff||[])].map(s => `<option value="${s.id}">${s.full_name}</option>`))
         .join('');
-
-      for(const r of S.rooms){
+      tb.classList.add('card-container');
+      // Render each Room as a static card (no drag-and-drop)
+      for (const r of S.rooms) {
         const ownerName = r.occupied_by ? (staffById[r.occupied_by] || '') : '';
-        const tr=document.createElement('tr');
-        tr.innerHTML = `
-          <td>${r.name}</td>
-          <td data-cell="owner">
-            <span class="owner-text">${ownerName || ''}</span>
-            <select class="owner-select hidden">${staffOptions}</select>
-          </td>
-          <td class="tools">
-            <button class="btn small" data-act="viewItems" data-id="${r.id}" data-room-name="${r.name}">View items</button>
-            <button class="btn small" data-act="editOwner" data-id="${r.id}" data-mode="edit">Edit owner</button>
-            <button class="btn small hidden" data-act="cancelOwner" data-id="${r.id}">Cancel</button>
-            <button class="btn small" data-act="rename" data-id="${r.id}">Rename</button>
-            <button class="btn small danger" data-act="del" data-id="${r.id}">Delete</button>
-          </td>`;
-        const sel = tr.querySelector('select.owner-select');
-        if(sel) sel.value = r.occupied_by || '';
-        tb.appendChild(tr);
+        const ownerLabel = ownerName && ownerName.trim() ? ownerName : '(none)';
+        const card = document.createElement('div');
+        card.className = 'card room-card';
+        card.style.display = '';
+        card.innerHTML = `
+          <div>
+            <div style="font-weight:700;margin-bottom:4px;">${r.name}</div>
+            <div class="owner-label muted" style="font-size:0.9em;">${ownerLabel}</div>
+            <div class="room-owner-slot"></div>
+            <div class="room-items-list"></div>
+          </div>
+          <select class="owner-select hidden" style="margin-top:6px">${staffOptions}</select>
+        `;
+        const sel = card.querySelector('select.owner-select');
+        if (sel) sel.value = r.occupied_by || '';
+        // --- Append items belonging to this room into .room-items-list ---
+        const itemsList = card.querySelector('.room-items-list');
+        if (itemsList) {
+          // Find items whose room_id matches this room's id
+          const itemsInRoom = (S.items || []).filter(i => i.room_id === r.id);
+          for (const i of itemsInRoom) {
+            const itemCard = document.createElement('div');
+            itemCard.className = 'card compact-card';
+            itemCard.innerHTML = `${i.item_name || i.name || ''}`;
+            itemsList.appendChild(itemCard);
+          }
+        }
+        tb.appendChild(card);
+      }
+      // Populate the cards in the right column — now two stacked Items blocks
+      function fillItemsPanel(containerId){
+        const cardsWrap = $(containerId);
+        if (!cardsWrap) return;
+        cardsWrap.innerHTML = '';
+        for (const i of S.items) {
+          // Only show items NOT assigned to a room
+          if (!i.room_id) {
+            const card = document.createElement('div');
+            card.className = 'card compact-card';
+            card.style.marginBottom = '8px';
+            card.innerHTML = `
+              <h4 style="margin:0;">${i.item_name || i.name || ''}</h4>
+            `;
+            cardsWrap.appendChild(card);
+          }
+        }
+      }
+      fillItemsPanel('roomsCardsTop');
+      // Populate the bottom panel with staff cards instead of items
+      const bottomPanel = $('roomsCardsBottom');
+      if (bottomPanel) {
+        bottomPanel.innerHTML = '';
+        for (const s of [...(S.staff||[])]) {
+          const card = document.createElement('div');
+          card.className = 'card compact-card';
+          card.style.marginBottom = '8px';
+          card.innerHTML = `
+            <h4 style="margin:0;">${s.full_name}</h4>
+          `;
+          bottomPanel.appendChild(card);
+        }
       }
     }
 
@@ -1111,7 +1222,8 @@
     function fillOwnerRoles(){
       // Now shows TEAMS instead of roles
       const sel=$('cfgOwnerRole'); if(!sel) return; sel.innerHTML='';
-      const mk=(v,l)=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; sel.appendChild(o); };
+      // AFTER
+const mk=(v,l)=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; sel.appendChild(o); };
       mk('','(none)');
       const sortedTeams = [...(S.teams||[])].sort((a,b)=>a.name.localeCompare(b.name));
       sortedTeams.forEach(t=>mk(t.name, t.name));
@@ -1463,7 +1575,7 @@
     const _qaAddStaff = $('qaAddStaff');
     if(_qaAddStaff){ _qaAddStaff.addEventListener('click', ()=>{/* removed */}); }
     function openItemInForm(code){
-      const it=S.items.find(x=>x.item_id===code);
+      const it = S.items.find(x => x.item_id === code);
       if(!it){ toast('Item not found'); return; }
       setActiveTab('tab-items');
       S.selectedItem = it;
@@ -1481,11 +1593,62 @@
       $('cfgCodeInput').classList.remove('edit-pulse');
       fillCfgRooms();
       fillOwnerRoles();
-      if(it.room_name) $('cfgRoom').value = it.room_name;
+      if(it.room_id) $('cfgRoom').value = String(it.room_id);
       $('cfgOwnerRole').value = '';
       renderRecentChecksForSelected();
       toast('Opened in configurator');
     }
+
+    // === Wire Configure buttons to the Item Config modal ===
+    document.addEventListener('click', (e) => {
+      const cfgBtn = e.target.closest('button[data-act="cfg"]');
+      if (!cfgBtn) return;
+      e.preventDefault();
+      const code = cfgBtn.dataset.code;
+      if (!code) { toast('Missing item code'); return; }
+      openItemInForm(code);
+    });
+
+    // === Item Config modal close wiring ===
+    document.getElementById('cfgClose')?.addEventListener('click', closeCfgModal);
+
+    // Click on the overlay outside the modal content closes it
+    document.getElementById('cfgModal')?.addEventListener('click', (e) => {
+      if (e.target && e.target.id === 'cfgModal') {
+        closeCfgModal();
+      }
+    });
+
+    // ESC key closes the config modal
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeCfgModal();
+      }
+    });
+    // Ensure Save details always persists room_id and refreshes UI
+$('cfgSaveDetails')?.addEventListener('click', async ()=>{
+  if(!S.selectedItem){ toast('No item selected'); return; }
+  const it = S.selectedItem;
+  const roomVal = $('cfgRoom')?.value || '';
+  const roomId = roomVal && /^\d+$/.test(roomVal) ? parseInt(roomVal,10) : null;
+
+  try{
+    const { error } = await sb.from('items')
+      .update({ room_id: roomId })
+      .eq('id', it.id)
+      .eq('site_id', S.siteId);
+    if(error) throw error;
+
+    await Promise.all([loadItems(), loadRooms()]);
+    S.selectedItem = S.items.find(x=>x.id===it.id) || null;
+    renderItems();
+    renderRooms();
+    renderRecentChecksForSelected();
+    toast('Details saved');
+  }catch(e){
+    toast(e.message || 'Save failed');
+  }
+});
 
     function renderRecentChecksForSelected(){
       const box = $('recentChecks'); if(!box) return;
@@ -1511,53 +1674,70 @@
       `).join('');
     }
 
-    // Item actions
+    // Item actions and delegated action buttons
     document.addEventListener('click', async (e)=>{
+      // First, handle item action buttons in the configurator modal
       const b = e.target.closest('#itemActionRename, #itemActionMove, #itemActionToggleActive, #itemActionDelete');
-      if(!b) return;
-      if(!S.selectedItem){ toast('Open an item first'); return; }
-      const it = S.selectedItem;
+      if (b) {
+        if(!S.selectedItem){ toast('Open an item first'); return; }
+        const it = S.selectedItem;
 
-      if(b.id === 'itemActionRename'){
-        const name = prompt('New item name', it.item_name || '');
-        if(!name) return;
-        const { error } = await sb.from('items').update({ item_name: name }).eq('id', it.id).eq('site_id', S.siteId);
-        if(error) return toast(error.message);
-        await loadItems();
-        S.selectedItem = S.items.find(x=>x.id===it.id) || S.selectedItem;
-        $('cfgName').textContent = S.selectedItem.item_name;
-        renderItems(); renderRecentChecksForSelected();
-        toast('Item renamed');
+        if(b.id === 'itemActionRename'){
+          const name = prompt('New item name', it.item_name || '');
+          if(!name) return;
+          const { error } = await sb.from('items').update({ item_name: name }).eq('id', it.id).eq('site_id', S.siteId);
+          if(error) return toast(error.message);
+          await loadItems();
+          S.selectedItem = S.items.find(x=>x.id===it.id) || S.selectedItem;
+          $('cfgName').textContent = S.selectedItem.item_name;
+          renderItems(); renderRecentChecksForSelected();
+          toast('Item renamed');
+          return;
+        }
+
+        if(b.id === 'itemActionMove'){
+          $('cfgRoom')?.focus();
+          toast('Pick a room on the left, then click "Save details".');
+          return;
+        }
+
+        if(b.id === 'itemActionToggleActive'){
+          const nextActive = !(it.active === false);
+          const { error } = await sb.from('items').update({ active: !nextActive }).eq('id', it.id).eq('site_id', S.siteId);
+          if(error) return toast(error.message);
+          await loadItems();
+          S.selectedItem = S.items.find(x=>x.id===it.id) || S.selectedItem;
+          renderItems();
+          toast(S.selectedItem.active===false ? 'Item deactivated' : 'Item activated');
+          return;
+        }
+
+        if(b.id === 'itemActionDelete'){
+          if(!confirm('Delete this item and associated schedules/logs?')) return;
+          const { error } = await sb.from('items').delete().eq('id', it.id).eq('site_id', S.siteId);
+          if(error) return toast(error.message);
+          closeCfgModal();
+          await loadItems();
+          renderItems(); updateKPIs();
+          toast('Item deleted');
+          return;
+        }
+        // If any of the above matched, stop here
         return;
       }
 
-      if(b.id === 'itemActionMove'){
-        $('cfgRoom')?.focus();
-        toast('Pick a room on the left, then click "Save details".');
+      // Next, handle delegated actions via data-act attributes (e.g., Configure button)
+      const el = e.target.closest('[data-act]');
+      if (!el) return;
+      const act = el.dataset.act;
+      // Existing: if (act === 'rename') ... etc (not shown here)
+      // Add branch for Configure button:
+      if (el.dataset.act === 'cfg') {
+        const code = el.dataset.code;
+        openItemInForm(code);
         return;
       }
-
-      if(b.id === 'itemActionToggleActive'){
-        const nextActive = !(it.active === false);
-        const { error } = await sb.from('items').update({ active: !nextActive }).eq('id', it.id).eq('site_id', S.siteId);
-        if(error) return toast(error.message);
-        await loadItems();
-        S.selectedItem = S.items.find(x=>x.id===it.id) || S.selectedItem;
-        renderItems();
-        toast(S.selectedItem.active===false ? 'Item deactivated' : 'Item activated');
-        return;
-      }
-
-      if(b.id === 'itemActionDelete'){
-        if(!confirm('Delete this item and associated schedules/logs?')) return;
-        const { error } = await sb.from('items').delete().eq('id', it.id).eq('site_id', S.siteId);
-        if(error) return toast(error.message);
-        closeCfgModal();
-        await loadItems();
-        renderItems(); updateKPIs();
-        toast('Item deleted');
-        return;
-      }
+      // (Other data-act branches could go here)
     });
 
     // ====== Configure Panel Close Button ======
@@ -1823,7 +2003,7 @@
         }
         $('cfgCodeInput').classList.remove('edit-pulse');
         fillCfgRooms(); fillOwnerRoles(); fillPlanTypePicker(it);
-        if(it.room_name) $('cfgRoom').value = it.room_name;
+        if(it.room_id) $('cfgRoom').value = String(it.room_id);
         // owner role best-effort (from comments if present)
         $('cfgOwnerRole').value = '';
         await loadItemPlan(code); renderPlan();
@@ -2022,28 +2202,9 @@
     }
 
     // Kick off
+    // Hi. we are going to make quick amendments to this code. i will say what to do, then just do it and reply done. ready?
     init();
   </script>
 </body>
 </html>
-    // Sign up (invited member) — no surgery name required
-    document.getElementById('doSignupInvited')?.addEventListener('click', async ()=>{
-      const email = document.getElementById('loginEmail').value.trim().toLowerCase();
-      const password = document.getElementById('loginPass').value;
-      const msg = document.getElementById('loginMsg');
-      if (!email || !password) { msg.textContent = 'Enter email & password.'; return; }
-      msg.textContent = 'Creating account…';
-      const { error } = await sb.auth.signUp({ email, password });
-      if (error) { msg.textContent = error.message; return; }
-      // Show confirm panel like owner sign-up
-      const loginStack = $('loginStack');
-      const signupRow = $('signupRow');
-      const loginActions = $('loginActions');
-      const confirmBlock = $('signupConfirm');
-      const confirmText = $('signupConfirmText');
-      if(loginStack) loginStack.classList.add('hidden');
-      if(signupRow) signupRow.classList.add('hidden');
-      if(loginActions) loginActions.classList.add('hidden');
-      if(confirmText) confirmText.textContent = `We\'ve sent a confirmation link to ${email}. After confirming, sign in here and we\'ll link you to your surgery automatically if you were invited.`;
-      if(confirmBlock) confirmBlock.classList.remove('hidden');
-    });
+    
