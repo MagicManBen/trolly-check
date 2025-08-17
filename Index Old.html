@@ -1,8 +1,6 @@
 <!doctype html>
 <html>
 <head>
-  <style id="auto-login-hide">#panel-login{display:none !important}</style>
-
   <meta charset="utf-8" />
   <title>ClinicAssure — Sites, Rooms, Items, Staff</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -611,32 +609,6 @@
     );
     window.sb = supabase;
   </script>
-  <script id="auto-login-script">
-    // === AUTO-LOGIN (inserted by ChatGPT) ===
-    (async function(){
-      try{
-        // Hardcoded credentials per user's request
-        const AUTO_EMAIL = "benhowardmagic@hotmail.com";
-        const AUTO_PASS = "Hello1!";
-
-        if(!window.sb || !window.sb.auth){ console.warn("Supabase not ready for auto-login."); return; }
-
-        // If no session, sign in; otherwise proceed to init (which is already wired to auth state changes).
-        const { data: { session } } = await window.sb.auth.getSession();
-        if(!session){
-          const { data, error } = await window.sb.auth.signInWithPassword({
-            email: AUTO_EMAIL, password: AUTO_PASS
-          });
-          if(error){ console.error("Auto-login failed:", error.message); }
-          // init() will be called via onAuthStateChange
-        } else {
-          // Ensure init runs at least once
-          if (typeof init === "function") { init(); }
-        }
-      }catch(e){ console.error("Auto-login exception:", e); }
-    })();
-  </script>
-
   <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
   <script>
     // ====== CONFIG ======
